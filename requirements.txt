@@ -1,0 +1,10 @@
+fastapi==0.143.3
+uvicorn==0.54.0
+SQLAlchemy==2.1.5
+psycopg[binary]==3.3.6
+redis==8.1.0
+httpx==0.28.1
+pydantic-settings==2.16.0
+APScheduler==3.11.3
+pytest==9.1.1
+anthropic==1.15.0

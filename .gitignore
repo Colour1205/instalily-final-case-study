@@ -1,0 +1,25 @@
+# Private: the brief, session notes, secrets
+instructions.pdf
+CLAUDE.md
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Editors, tools, OS
+.claude/
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini

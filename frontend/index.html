@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LiLi · Roofing leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="nav" id="nav">
+    <a class="brand" href="/"><span class="mark"></span>LiLi</a>
+    <div class="links" id="links">
+      <a class="pill" href="https://www.gaf.com/en-us/roofing-contractors/residential?distance=25" target="_blank" rel="noopener">GAF</a>
+      <button class="pill" type="button" data-open="shorts">Shorts</button>
+      <a class="pill" href="/docs" target="_blank" rel="noopener">API</a>
+    </div>
+    <button class="icon menu" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" hidden></button>
+    <div class="menu-list" id="menuList" hidden></div>
+  </nav>
+
+  <div class="shell">
+    <aside class="side" id="side" aria-label="Filters">
+      <div class="side-head">
+        <span class="label">Filters</span>
+        <button class="text-btn" id="resetBtn" type="button">Reset</button>
+      </div>
+      <form id="filters">
+        <fieldset>
+          <legend class="label">Certification</legend>
+          <div class="seg">
+            <label><input type="checkbox" name="certification" value="Master Elite"><span>Master Elite</span></label>
+            <label><input type="checkbox" name="certification" value="Certified Plus"><span>Certified Plus</span></label>
+            <label><input type="checkbox" name="certification" value="Certified"><span>Certified</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="label">Product lines</legend>
+          <div class="seg">
+            <label><input type="checkbox" name="service" value="FORTIFIED"><span>FORTIFIED</span></label>
+            <label><input type="checkbox" name="service" value="Metal"><span>Metal</span></label>
+            <label><input type="checkbox" name="service" value="Solar"><span>Solar</span></label>
+            <label><input type="checkbox" name="service" value="Single-Ply"><span>Single-ply</span></label>
+            <label><input type="checkbox" name="service" value="Asphaltic"><span>Asphaltic</span></label>
+            <label><input type="checkbox" name="service" value="Coatings"><span>Coatings</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="label">Awards</legend>
+          <div class="seg">
+            <label><input type="checkbox" name="presidents_club" value="true"><span>President's Club</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="label">Rating</legend>
+          <div class="seg">
+            <label><input type="radio" name="min_rating" value="" checked><span>Any</span></label>
+            <label><input type="radio" name="min_rating" value="4.5"><span>4.5+</span></label>
+            <label><input type="radio" name="min_rating" value="4.8"><span>4.8+</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="label">Distance</legend>
+          <div class="seg">
+            <label><input type="radio" name="max_distance" value="" checked><span>Any</span></label>
+            <label><input type="radio" name="max_distance" value="5"><span>5 mi</span></label>
+            <label><input type="radio" name="max_distance" value="10"><span>10 mi</span></label>
+            <label><input type="radio" name="max_distance" value="25"><span>25 mi</span></label>
+          </div>
+        </fieldset>
+      </form>
+      <div class="mini">
+        <div class="mini-map" id="miniMap" aria-label="Map of results"></div>
+        <button class="icon round over" id="mapBtn" type="button" aria-label="Open map"></button>
+      </div>
+    </aside>
+
+    <main class="feed">
+      <form class="search" id="search" role="search">
+        <button class="icon filter-btn" id="filterBtn" type="button" aria-label="Filters"></button>
+        <span class="search-ico" aria-hidden="true"></span>
+        <input id="q" type="search" placeholder="Search contractors" autocomplete="off" aria-label="Search contractors">
+        <button class="pill solid" type="submit">Search</button>
+      </form>
+      <div class="count label" id="count"></div>
+      <div class="cards" id="cards"></div>
+      <div class="sentinel" id="sentinel"></div>
+    </main>
+
+    <aside class="shorts-dock" id="shortsDock" aria-label="Roofing shorts"></aside>
+  </div>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="drawer-scrim" id="drawerScrim" hidden></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script type="module" src="app.js"></script>
+  <script type="module" src="map.js"></script>
+  <script type="module" src="shorts.js"></script>
+</body>
+</html>
