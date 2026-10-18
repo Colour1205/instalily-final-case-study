@@ -1,5 +1,7 @@
 // LiLi: lead cards, filters, search, the flip-open detail window and the contact panel.
 
+import { API_BASE } from './config.js';
+
 const $ = sel => document.querySelector(sel);
 
 const svg = paths => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -37,7 +39,7 @@ let scrimTimer = null;
 
 // Fetch JSON from the LiLi API; throws on HTTP errors.
 export async function api(path) {
-  const res = await fetch(path);
+  const res = await fetch(API_BASE + path);
   if (!res.ok) throw new Error(res.status);
   return res.json();
 }

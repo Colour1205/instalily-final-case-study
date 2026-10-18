@@ -7,14 +7,18 @@ Open the app at http://localhost:8000 and the API docs at http://localhost:8000/
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from leads import routes_leads
+from shared.config import settings
 
 FRONTEND_FOLDER = Path(__file__).resolve().parent.parent / "frontend"
 
 app = FastAPI(title="GAF Lead Platform API", version="1")
 app.include_router(routes_leads.router)
+# Lets the frontend on GitHub Pages read the API (read-only: GET requests only).
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET"])
 
 
 @app.middleware("http")

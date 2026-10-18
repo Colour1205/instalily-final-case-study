@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
     # How long a leads page or lead detail stays in the Redis cache.
     lead_cache_seconds: int = 60
+    # Other websites allowed to call the API from a browser (the frontend on GitHub Pages).
+    cors_origins: list[str] = ["https://colour1205.github.io"]
 
     scrape_zip_codes: list[str] = ["10013"]
     zip_coordinates: dict[str, tuple[float, float]] = {"10013": (40.7217861, -74.0094471)}

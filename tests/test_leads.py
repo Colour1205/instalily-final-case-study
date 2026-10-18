@@ -129,6 +129,20 @@ def test_map_route_returns_the_service_answer(monkeypatch):
     assert client.get("/v1/map?max_distance=10").json()["max"] == 10
 
 
+def test_only_the_github_pages_site_may_read_the_api_from_a_browser(monkeypatch):
+    """The browser on GitHub Pages gets permission to read the API; any other website does not."""
+
+    def fake_list_leads(page, limit, filters, sort):
+        """Return an empty page."""
+        return {"page": page, "limit": limit, "total": 0, "leads": []}
+
+    monkeypatch.setattr(routes_leads.lead_service, "list_leads", fake_list_leads)
+    allowed = client.get("/v1/leads", headers={"Origin": "https://colour1205.github.io"})
+    assert allowed.headers.get("access-control-allow-origin") == "https://colour1205.github.io"
+    other = client.get("/v1/leads", headers={"Origin": "https://example.com"})
+    assert "access-control-allow-origin" not in other.headers
+
+
 def test_list_route_rejects_bad_values():
     """Out-of-range pages and limits, and an empty search, are refused before any database work."""
     assert client.get("/v1/leads", params={"limit": 500}).status_code == 422
