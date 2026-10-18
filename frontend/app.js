@@ -49,12 +49,6 @@ export function esc(text) {
   return String(text).replace(/[&<>"']/g, ch => map[ch]);
 }
 
-// A link from the web, only if it is a normal web address (blocks javascript: links).
-function safeUrl(url) {
-  if (/^https?:\/\//i.test(url || '')) return url;
-  return '';
-}
-
 // Star rating that fills to the given rating out of 5.
 export function stars(rating) {
   const pct = Math.max(0, Math.min(100, (rating / 5) * 100));
@@ -120,13 +114,36 @@ export function toast(text) {
   setTimeout(() => el.remove(), 1800);
 }
 
-// The current filters and search as a query string for the API.
+// Search-bar words that rank the list by a score part instead of searching names.
+const rankWords = {
+  rating: 'rating', reviews: 'rating', gaf: 'rank', rank: 'rank',
+  specialty: 'specialty', specialties: 'specialty', distance: 'distance', closest: 'distance', nearest: 'distance',
+};
+const rankNames = { rating: 'Rating', rank: 'GAF rank', specialty: 'Specialty', distance: 'Distance' };
+
+// Split the search text into ranking words and the words to look for in names and addresses.
+function readSearch() {
+  const sort = [];
+  const words = [];
+  for (const word of $('#q').value.trim().split(/\s+/)) {
+    const part = rankWords[word.toLowerCase()];
+    if (part) {
+      if (!sort.includes(part)) sort.push(part);
+    } else if (word) {
+      words.push(word);
+    }
+  }
+  return { sort, q: words.join(' ') };
+}
+
+// The current filters, search and ranking as a query string for the API.
 export function query() {
   const form = new FormData($('#filters'));
   const params = new URLSearchParams();
   for (const [key, val] of form) if (val) params.append(key, val);
-  const q = $('#q').value.trim();
-  if (q) params.set('q', q);
+  const search = readSearch();
+  if (search.q) params.set('q', search.q);
+  for (const part of search.sort) params.append('sort', part);
   return params.toString();
 }
 
@@ -172,7 +189,10 @@ async function loadMore() {
     }
     state.loaded += data.leads.length;
     state.done = state.loaded >= data.total;
-    $('#count').textContent = `${data.total} leads`;
+    const sort = readSearch().sort;
+    let count = `${data.total} leads`;
+    if (sort.length) count += ` · ranked by ${sort.map(part => rankNames[part]).join(' + ')}`;
+    $('#count').textContent = count;
     if (data.total === 0) list.innerHTML = '<div class="empty">No leads match these filters.</div>';
     if (data.page === 1) document.dispatchEvent(new CustomEvent('lili:leads', { detail: data.leads.slice(0, 12) }));
   } catch (err) {
@@ -301,21 +321,10 @@ function detailHtml(d) {
       <div class="sec"><h4 class="label">Pitch</h4><p>${esc(a.pitch)}</p></div>
       <div class="sec"><h4 class="label">Talking points</h4><ol>${points}</ol></div>`;
   }
-  const r = d.research;
   let contact = '';
-  if (r && r.people.length) contact += `<span>On their website: ${esc(r.people.join(', '))}</span>`;
   if (c.phone) contact += `<a href="tel:${esc(c.phone.replace(/[^\d+]/g, ''))}">${esc(c.phone)}</a>`;
   if (c.address) contact += `<span>${esc(c.address)}${c.maps_url ? ` · <a href="${esc(c.maps_url)}" target="_blank" rel="noopener">Map</a>` : ''}</span>`;
-  if (r && safeUrl(r.website)) contact += `<a href="${esc(safeUrl(r.website))}" target="_blank" rel="noopener">${esc(r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`;
   if (c.profile_url) contact += `<a href="${esc(c.profile_url)}" target="_blank" rel="noopener">GAF profile</a>`;
-  let note = '';
-  if (r) {
-    let links = '';
-    for (let i = 0; i < r.sources.length; i++) {
-      if (safeUrl(r.sources[i])) links += ` <a href="${esc(r.sources[i])}" target="_blank" rel="noopener">[${i + 1}]</a>`;
-    }
-    note = `<p class="note">Website details found by web search on ${esc(r.researched_at.slice(0, 10))}.${links}</p>`;
-  }
   return `
     <button class="icon x" type="button" aria-label="Close">${ico.close}</button>
     <div class="detail">
@@ -323,8 +332,7 @@ function detailHtml(d) {
       <div class="tags">${tags(d, true)}</div>
       <div class="score-row">${donut(d.score, 104)}<div class="bars">${bars(d.score)}</div></div>
       ${analysis}
-      <div class="sec"><h4 class="label">Contact</h4><div class="contact">${contact}</div>
-        ${note}</div>
+      <div class="sec"><h4 class="label">Contact</h4><div class="contact">${contact}</div></div>
     </div>
     <div class="detail-foot"><button class="pill accent contact-btn" type="button">${ico.mail} Contact</button></div>`;
 }

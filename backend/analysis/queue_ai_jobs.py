@@ -13,17 +13,6 @@ ADD_JOB = text("""
     RETURNING gaf_id
 """)
 
-# Claim one contractor's job straight away (after new web research), unless another worker is running it.
-# attempts goes up, never back, so a stalled worker holding the old number can no longer finish the job.
-CLAIM_NOW = text("""
-    INSERT INTO ai_jobs (gaf_id, status, attempts) VALUES (:gaf_id, 'running', 1)
-    ON CONFLICT (gaf_id) DO UPDATE
-        SET status = 'running', attempts = ai_jobs.attempts + 1, error = NULL, delay = INTERVAL '0 seconds',
-            updated_at = now()
-        WHERE ai_jobs.status <> 'running'
-    RETURNING gaf_id, attempts
-""")
-
 # A job that stays 'running' too long belongs to a crashed worker: retry it, or fail it if out of attempts.
 RELEASE_STUCK_JOBS = text("""
     UPDATE ai_jobs
@@ -75,13 +64,6 @@ class AIJobQueue:
         """Queue a contractor unless its analysis matches these facts or its job is already open."""
         queued = connection.execute(ADD_JOB, {"gaf_id": gaf_id, "fingerprint": fingerprint}).scalar()
         return queued is not None
-
-    def claim_now(self, connection: Connection, gaf_id: str) -> dict | None:
-        """Claim this contractor's job now, whatever its state, unless another worker is running it (then None)."""
-        row = connection.execute(CLAIM_NOW, {"gaf_id": gaf_id}).first()
-        if row is None:
-            return None
-        return {"gaf_id": row.gaf_id, "attempts": row.attempts}
 
     def claim(self, connection: Connection) -> dict | None:
         """Free any stuck jobs, then hand out the next ready job (or None if there is none)."""

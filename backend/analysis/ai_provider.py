@@ -3,7 +3,6 @@
 Knows nothing about the database or the job queue.
 """
 
-import datetime
 import hashlib
 import json
 
@@ -75,25 +74,6 @@ Answer:
 {"summary": "A small or newer Yonkers exteriors company with no homeowner reviews yet. The name suggests work beyond roofing, such as siding or windows.", "why_good_lead": "As a GAF Certified contractor they need GAF products to offer the System Plus warranty. A smaller contractor may not have a fixed supplier yet.", "pitch": "Lead with complete System Plus-eligible shingle systems that can be ordered in one place.", "talking_points": ["Ask for the owner: at a smaller contractor the owner usually chooses suppliers.", "Ask what kinds of residential jobs they focus on.", "Explain how a full System Plus system can be ordered at once.", "Ask how they get materials to job sites today."], "draft_email": "Subject: Making System Plus jobs easier to supply\\n\\nHello Northline Exteriors team,\\n\\nAs a GAF Certified contractor, you can offer the System Plus warranty, and we can supply every part of those roof systems in one order.\\n\\nWould you be open to a quick call about your upcoming jobs?\\n\\nBest regards,\\n[Your name]"}"""
 
 
-RESEARCH_PROMPT = """Today is {today}. You research one roofing contractor for sales reps at a roofing materials distributor.
-Use web search to find the contractor's own website (match the name, address or phone), then read it with web fetch. Never use gaf.com.
-Report only what the contractor's own website says:
-- website: its home page address, or "" if you cannot find a site you are sure belongs to them.
-- about: 1-2 plain sentences on what the company says about itself: the work it does, years in business, service area. "" if unknown.
-- people: owners or managers named on its own website, each as "Name (role)". Empty if none are named."""
-
-# The JSON shape of a research answer.
-RESEARCH_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "website": {"type": "string"},
-        "about": {"type": "string"},
-        "people": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["website", "about", "people"],
-    "additionalProperties": False,
-}
-
 # The JSON shape every AI provider must return (a JSON Schema, which Claude's structured output follows).
 ANALYSIS_SCHEMA = {
     "type": "object",
@@ -110,10 +90,10 @@ ANALYSIS_SCHEMA = {
 
 
 class AbstractAIProvider:
-    """Turns contractor facts into web research and a sales analysis. Each child writes _generate and _research."""
+    """Turns one contractor's facts into a sales analysis. Not used directly: each child writes _generate."""
 
-    def analyze(self, facts: dict, research: dict | None = None) -> dict:
-        """Build the prompt from one contractor's facts (plus web research, if any) and return the model's analysis."""
+    def analyze(self, facts: dict) -> dict:
+        """Build the prompt from one contractor's facts and return the model's analysis as a dictionary."""
         stars = int(facts["president_club_stars"])
         presidents_club = "none"
         if stars == 1:
@@ -137,13 +117,9 @@ class AbstractAIProvider:
             f"Rating: {rating}",
             f"Reviews: {self.review_band(facts['review_count'])}",
             f"Product lines: {', '.join(facts['services']) or 'none'}",
+            # Always this line: the fine-tuned local model (lili-analyst) was trained with prompt v3, which has it.
+            "Website: not researched",
         ]
-        if research is None:
-            lines.append("Website: not researched")
-        else:
-            lines.append(f"Website: {research['website'] or 'not found'}")
-            lines.append(f"About (from their website): {research['about'] or 'not found'}")
-            lines.append(f"People named on their website: {', '.join(research['people']) or 'none'}")
         prompt = "Facts:\n"
         for line in lines:
             prompt += "- " + line + "\n"
@@ -152,15 +128,6 @@ class AbstractAIProvider:
     def _generate(self, system_prompt: str, user_prompt: str) -> dict:
         """Send the prompts to the model and return its JSON answer. Every child class must write its own version."""
         raise NotImplementedError("Each AI provider must write _generate")
-
-    def research(self, facts: dict) -> dict:
-        """Look the contractor up on the web. Returns website, about, people and the sources that were read."""
-        prompt = f"Contractor: {facts['name']}\nAddress: {facts['address'] or 'unknown'}\nPhone: {facts['phone'] or 'unknown'}"
-        return self._research(RESEARCH_PROMPT.format(today=datetime.date.today().isoformat()), prompt)
-
-    def _research(self, system_prompt: str, user_prompt: str) -> dict:
-        """Search the web and return the RESEARCH_SCHEMA answer plus "sources". Every child class must write its own."""
-        raise NotImplementedError("Each AI provider must write _research")
 
     def review_band(self, review_count: int) -> str:
         """Group a review count into none, 1-9, 10-49, 50-99, 100-499 or 500+."""

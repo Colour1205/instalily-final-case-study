@@ -7,7 +7,12 @@ from leads.cache_leads import LeadCache
 from leads.db_leads import LeadStore
 from shared.config import settings
 from shared.db_postgres import replica_engine
-from shared.score_priority import score_parts
+
+
+# The four score parts as stored in the contractors table (the user's exact names).
+SCORE_PARTS = ("review_count_adjust_rating", "gaf_rank", "specialty", "distance")
+# Ranking words the API accepts, and the SQL weight each one switches on.
+SORT_WEIGHTS = {"rating": "w_rating", "rank": "w_rank", "specialty": "w_specialty", "distance": "w_distance"}
 
 
 class LeadService:
@@ -18,9 +23,11 @@ class LeadService:
         self.store = LeadStore()
         self.cache = LeadCache(settings.lead_cache_seconds)
 
-    def list_leads(self, page: int, limit: int, filters: dict) -> dict:
-        """One page of leads, best priority score first, with the total for paging."""
-        key = f"leads:v1:page={page}:limit={limit}:" + self.filters_key(filters)
+    def list_leads(self, page: int, limit: int, filters: dict, sort: list[str]) -> dict:
+        """One page of leads ranked by the chosen score parts (by the priority score when none are chosen)."""
+        sort = sorted(sort)
+        key = f"leads:v1:page={page}:limit={limit}:sort={','.join(sort)}:" + self.filters_key(filters)
+        weights = self.sort_weights(sort)
 
         def read_page() -> dict:
             """Read this page from the replica (only one request per key does this at a time)."""
@@ -28,7 +35,7 @@ class LeadService:
                 # One snapshot for both queries, so the total always matches the page.
                 connection.execution_options(isolation_level="REPEATABLE READ")
                 total = self.store.count_leads(connection, filters)
-                rows = self.store.list_leads(connection, filters, limit, (page - 1) * limit)
+                rows = self.store.list_leads(connection, filters, weights, limit, (page - 1) * limit)
             leads = []
             for row in rows:
                 leads.append(self.lead_summary(row))
@@ -62,6 +69,14 @@ class LeadService:
 
         return self.cache.get_or_build("map:v1:" + self.filters_key(filters), read_points)
 
+    def sort_weights(self, sort: list[str]) -> dict:
+        """Weight 1 for each chosen score part and 0 for the others; nothing chosen means all four."""
+        weights = {}
+        for name in SORT_WEIGHTS:
+            chosen = not sort or name in sort
+            weights[SORT_WEIGHTS[name]] = int(chosen)
+        return weights
+
     def filters_key(self, filters: dict) -> str:
         """The filters written into a cache key as JSON, so two different filter sets can never share an answer."""
         key = dict(filters)
@@ -87,9 +102,8 @@ class LeadService:
     def lead_summary(self, row: dict) -> dict:
         """The fields shown in the ranked list, with the score total and its four parts."""
         score = {"total": self.to_float(row["priority_score"])}
-        parts = score_parts(row)
-        for name in parts:
-            score[name] = round(parts[name], 2)
+        for name in SCORE_PARTS:
+            score[name] = self.to_float(row[name])
         return {
             "gaf_id": row["gaf_id"],
             "name": row["name"],
@@ -107,7 +121,7 @@ class LeadService:
         }
 
     def lead_detail(self, row: dict) -> dict:
-        """Everything about one lead: the list fields, contact details, web research and the AI analysis."""
+        """Everything about one lead: the list fields, contact details and the AI analysis."""
         lead = self.lead_summary(row)
         maps_url = None
         if row["address"]:
@@ -119,15 +133,6 @@ class LeadService:
             "profile_url": row["profile_url"],
         }
         lead["updated_at"] = row["updated_at"].isoformat()
-        lead["research"] = None
-        if row["has_research"]:
-            lead["research"] = {
-                "website": row["website"],
-                "about": row["about"],
-                "people": row["people"],
-                "sources": row["sources"],
-                "researched_at": row["researched_at"].isoformat(),
-            }
         lead["analysis"] = None
         if row["has_analysis"]:
             lead["analysis"] = {

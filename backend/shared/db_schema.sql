@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS contractors (
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
+-- The four 25-point parts of priority_score, so the list can be ranked by any of them.
+-- ADD COLUMN IF NOT EXISTS also upgrades databases created before these columns existed.
+ALTER TABLE contractors
+    ADD COLUMN IF NOT EXISTS review_count_adjust_rating NUMERIC(5,2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS gaf_rank                   NUMERIC(5,2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS specialty                  NUMERIC(5,2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS distance                   NUMERIC(5,2) NOT NULL DEFAULT 0;
+
 -- gaf_id breaks ties so pages of the ranked list stay in a stable order.
 CREATE INDEX IF NOT EXISTS contractors_priority_score ON contractors (priority_score DESC, gaf_id);
 CREATE INDEX IF NOT EXISTS contractors_certification ON contractors (certification);
@@ -59,16 +67,6 @@ CREATE TABLE IF NOT EXISTS ai_jobs (
     -- How long to wait after updated_at before the job may be tried again.
     delay      INTERVAL    NOT NULL DEFAULT '0 seconds',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- What a web search found about a contractor (run on request, not by the daily scrape: web search costs money).
-CREATE TABLE IF NOT EXISTS research (
-    gaf_id        TEXT        PRIMARY KEY REFERENCES contractors (gaf_id) ON DELETE CASCADE,
-    website       TEXT        NOT NULL,
-    about         TEXT        NOT NULL,
-    people        TEXT[]      NOT NULL,
-    sources       TEXT[]      NOT NULL,
-    researched_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS ai_jobs_pending ON ai_jobs (updated_at) WHERE status = 'pending';

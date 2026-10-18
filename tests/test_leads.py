@@ -23,12 +23,13 @@ def make_row(**overrides) -> dict:
         "gaf_id": "42", "name": "Example Roofing", "rating": Decimal("4.8"), "review_count": 120,
         "certification": "Master Elite", "president_club_stars": 1, "commercial_certification": None,
         "services": ["Metal", "Solar"], "distance_miles": Decimal("25.00"), "priority_score": Decimal("61.67"),
+        "review_count_adjust_rating": Decimal("12.50"), "gaf_rank": Decimal("20.00"), "specialty": Decimal("16.67"),
+        "distance": Decimal("12.50"),
         "logo_url": None, "phone": "(555) 000-0000", "address": "1 Main St Newark, NJ 07101",
         "profile_url": "https://example.com/42", "fingerprint": "abc",
         "updated_at": datetime(2026, 10, 17, tzinfo=timezone.utc),
         "has_analysis": True, "summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a", "b", "c"],
         "draft_email": "e", "analysis_fingerprint": "abc",
-        "has_research": False, "website": None, "about": None, "people": None, "sources": None, "researched_at": None,
     }
     row.update(overrides)
     return row
@@ -62,20 +63,6 @@ def test_detail_without_analysis_or_address():
     assert lead["contact"]["maps_url"] is None
 
 
-def test_detail_includes_web_research_when_there_is_some():
-    """Research is null until a contractor is researched, then it carries the website, notes and sources."""
-    assert service.lead_detail(make_row())["research"] is None
-    lead = service.lead_detail(make_row(
-        has_research=True, website="https://example.com", about="Roofing and siding since 1998.",
-        people=["Ann Lee (owner)"], sources=["https://example.com/about"],
-        researched_at=datetime(2026, 10, 17, tzinfo=timezone.utc),
-    ))
-    assert lead["research"]["website"] == "https://example.com"
-    assert lead["research"]["people"] == ["Ann Lee (owner)"]
-    assert lead["research"]["sources"] == ["https://example.com/about"]
-    assert lead["research"]["researched_at"].startswith("2026-10-17")
-
-
 def test_cache_keys_never_mix_up_different_filters():
     """One value containing a comma is not the same filter as two values; order and letter case do not matter."""
     base = {"q": None, "certifications": None, "services": None, "presidents_club": False,
@@ -88,11 +75,34 @@ def test_cache_keys_never_mix_up_different_filters():
     assert service.filters_key(dict(base, q="Roof")) == service.filters_key(dict(base, q="roof"))
 
 
+def test_sort_words_pick_which_score_parts_are_added_up():
+    """No ranking words means all four parts (the priority score); otherwise only the chosen parts count."""
+    assert service.sort_weights([]) == {"w_rating": 1, "w_rank": 1, "w_specialty": 1, "w_distance": 1}
+    assert service.sort_weights(["rank", "specialty"]) == {"w_rating": 0, "w_rank": 1, "w_specialty": 1, "w_distance": 0}
+
+
+def test_list_route_passes_the_ranking_and_rejects_unknown_words(monkeypatch):
+    """Repeated sort values reach the service; a word that is not a score part is refused."""
+    received = {}
+
+    def fake_list_leads(page, limit, filters, sort):
+        """Record the ranking and return an empty page."""
+        received["sort"] = sort
+        return {"page": page, "limit": limit, "total": 0, "leads": []}
+
+    monkeypatch.setattr(routes_leads.lead_service, "list_leads", fake_list_leads)
+    assert client.get("/v1/leads?sort=specialty&sort=rank").status_code == 200
+    assert received["sort"] == ["specialty", "rank"]
+    assert client.get("/v1/leads").status_code == 200
+    assert received["sort"] == []
+    assert client.get("/v1/leads?sort=price").status_code == 422
+
+
 def test_list_route_passes_filters_and_returns_json(monkeypatch):
     """GET /v1/leads hands the page and every filter to the service and returns its JSON."""
     received = {}
 
-    def fake_list_leads(page, limit, filters):
+    def fake_list_leads(page, limit, filters, sort):
         """Record the arguments and return a tiny page."""
         received["args"] = (page, limit, filters)
         return {"page": page, "limit": limit, "total": 0, "leads": []}

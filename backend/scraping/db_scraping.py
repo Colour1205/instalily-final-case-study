@@ -5,11 +5,12 @@ from sqlalchemy import Connection, text
 UPSERT_CONTRACTOR = text("""
     INSERT INTO contractors (
         gaf_id, name, rating, review_count, certification, president_club_stars, commercial_certification,
-        services, phone, address, distance_miles, latitude, longitude, profile_url, logo_url, fingerprint, priority_score
+        services, phone, address, distance_miles, latitude, longitude, profile_url, logo_url, fingerprint, priority_score,
+        review_count_adjust_rating, gaf_rank, specialty, distance
     ) VALUES (
         :gaf_id, :name, :rating, :review_count, :certification, :president_club_stars, :commercial_certification,
         :services, :phone, :address, :distance_miles, :latitude, :longitude, :profile_url, :logo_url, :fingerprint,
-        :priority_score
+        :priority_score, :review_count_adjust_rating, :gaf_rank, :specialty, :distance
     )
     ON CONFLICT (gaf_id) DO UPDATE SET
         name = EXCLUDED.name,
@@ -28,6 +29,10 @@ UPSERT_CONTRACTOR = text("""
         logo_url = EXCLUDED.logo_url,
         fingerprint = EXCLUDED.fingerprint,
         priority_score = EXCLUDED.priority_score,
+        review_count_adjust_rating = EXCLUDED.review_count_adjust_rating,
+        gaf_rank = EXCLUDED.gaf_rank,
+        specialty = EXCLUDED.specialty,
+        distance = EXCLUDED.distance,
         updated_at = now()
 """)
 
@@ -42,9 +47,6 @@ START_RUN = text("""
     ON CONFLICT DO NOTHING
     RETURNING id
 """)
-
-
-UPDATE_FINGERPRINT = text("UPDATE contractors SET fingerprint = :fingerprint WHERE gaf_id = :gaf_id")
 
 
 class ScrapeStore:
@@ -77,7 +79,3 @@ class ScrapeStore:
     def save_contractor(self, connection: Connection, contractor: dict) -> None:
         """Insert a contractor, or update it if GAF's id is already saved."""
         connection.execute(UPSERT_CONTRACTOR, contractor)
-
-    def update_fingerprint(self, connection: Connection, gaf_id: str, fingerprint: str) -> None:
-        """Store a contractor's fingerprint again, for example after the prompt version changed."""
-        connection.execute(UPDATE_FINGERPRINT, {"gaf_id": gaf_id, "fingerprint": fingerprint})

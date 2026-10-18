@@ -103,3 +103,6 @@ def test_fetch_retries_then_skips_broken_results(monkeypatch):
     assert len(contractors) == 1
     assert contractors[0]["gaf_id"] == "1"
     assert contractors[0]["priority_score"] > 0
+    parts = contractors[0]["review_count_adjust_rating"] + contractors[0]["gaf_rank"]
+    parts += contractors[0]["specialty"] + contractors[0]["distance"]
+    assert abs(parts - contractors[0]["priority_score"]) < 0.05

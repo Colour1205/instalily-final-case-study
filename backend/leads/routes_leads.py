@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from leads.service_leads import LeadService
+from leads.service_leads import SORT_WEIGHTS, LeadService
 
 router = APIRouter(prefix="/v1")
 lead_service = LeadService()
@@ -46,10 +46,16 @@ def lead_filters(
 def list_leads(
     page: int = Query(1, ge=1, le=10000),
     limit: int = Query(20, ge=1, le=100),
+    sort: list[str] | None = Query(None),
     filters: dict = Depends(lead_filters),
 ) -> dict:
-    """One page of leads ranked by priority score. All filters are optional."""
-    return lead_service.list_leads(page, limit, filters)
+    """One page of leads. Ranked by priority score, or by the sum of the parts named in sort
+    (rating, rank, specialty, distance; repeat sort to pick several). All filters are optional."""
+    chosen = non_empty(sort) or []
+    for name in chosen:
+        if name not in SORT_WEIGHTS:
+            raise HTTPException(status_code=422, detail=f"Unknown sort: {name}")
+    return lead_service.list_leads(page, limit, filters, chosen)
 
 
 @router.get("/map")

@@ -7,8 +7,6 @@ Run from the backend folder:
     python orchestrator.py                 run forever (daily scrape + AI jobs)
     python orchestrator.py --scrape-now    scrape every ZIP now, then exit
     python orchestrator.py --analyze 5     finish 5 AI jobs, then exit
-    python orchestrator.py --research ID1 ID2   web-research these contractors, re-analyze each one, then exit
-                                            (web search costs about 1.5 cents each, so it never runs on its own)
 """
 
 import argparse
@@ -80,22 +78,16 @@ class Orchestrator:
         return all_ok
 
     def analyze_next(self) -> str:
-        """Claim the next ready AI job and finish it. Returns "no job", "analyzed" or "failed"."""
+        """Claim one AI job and finish it. Returns "no job", "analyzed" or "failed"."""
         with primary_engine.begin() as connection:
             job = self.queue.claim(connection)
-        if job is None:
-            return "no job"
-        return self.analyze_job(job)
-
-    def analyze_job(self, job: dict) -> str:
-        """Finish one claimed AI job. Returns "analyzed" or "failed"."""
-        with primary_engine.begin() as connection:
+            if job is None:
+                return "no job"
             facts = self.analysis_store.get_facts(connection, job["gaf_id"])
-            research = self.analysis_store.get_research(connection, job["gaf_id"])
 
         try:
             # The slow AI call happens outside any transaction, so it never holds database locks.
-            analysis = self.provider.analyze(facts, research)
+            analysis = self.provider.analyze(facts)
             # A missing or null field makes this save fail, which sends the job back to the queue.
             with primary_engine.begin() as connection:
                 if not self.queue.finish(connection, job):
@@ -119,38 +111,6 @@ class Orchestrator:
         log.info("%s: analyzed", facts["name"])
         return "analyzed"
 
-    def research(self, gaf_ids: list[str]) -> int:
-        """Web-research the given contractors and re-analyze each one straight away. Returns how many fully succeeded."""
-        # Check every id first, so a typo never stops a run after some searches were already paid for.
-        with primary_engine.begin() as connection:
-            unknown = self.analysis_store.unknown_ids(connection, gaf_ids)
-        if unknown:
-            log.error("Unknown gaf_id: %s. Nothing was researched.", ", ".join(unknown))
-            return 0
-        done = 0
-        for gaf_id in gaf_ids:
-            with primary_engine.begin() as connection:
-                facts = self.analysis_store.get_facts(connection, gaf_id)
-            try:
-                research = self.provider.research(facts)
-            except Exception as error:
-                log.warning("%s: research failed: %r", facts["name"], error)
-                continue
-            with primary_engine.begin() as connection:
-                self.analysis_store.save_research(connection, gaf_id, research)
-                # Re-read the facts: a scrape may have changed them during the web search. Storing their fingerprint
-                # under the current prompt version makes the new analysis count as current.
-                latest = self.analysis_store.get_facts(connection, gaf_id)
-                self.scrape_store.update_fingerprint(connection, gaf_id, self.provider.fingerprint(latest))
-                job = self.queue.claim_now(connection, gaf_id)
-            log.info("%s: researched (%s)", facts["name"], research["website"] or "no website found")
-            if job is None:
-                log.warning("%s: another worker is analyzing it now; run --research again later", facts["name"])
-                continue
-            if self.analyze_job(job) == "analyzed":
-                done += 1
-        return done
-
     def analysis_loop(self, stop: threading.Event) -> None:
         """Keep finishing AI jobs until told to stop. Pause when there is no job, and longer after a failure."""
         while not stop.is_set():
@@ -171,7 +131,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Runs the GAF scrape and the AI analysis jobs.")
     parser.add_argument("--scrape-now", action="store_true", help="scrape every ZIP now, then exit")
     parser.add_argument("--analyze", type=int, metavar="N", help="finish N AI jobs, then exit")
-    parser.add_argument("--research", nargs="+", metavar="GAF_ID", help="web-research these contractors, then exit")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -194,19 +153,13 @@ def main() -> None:
         raise ValueError(f"Unknown AI provider: {settings.ai_provider}")
     orchestrator = Orchestrator(provider)
 
-    if args.scrape_now or args.analyze is not None or args.research:
+    if args.scrape_now or args.analyze is not None:
         all_ok = True
-        jobs = args.analyze
         if args.scrape_now:
             all_ok = orchestrator.scrape_all(force=True)
-        if args.research:
-            researched = orchestrator.research(args.research)
-            log.info("Researched and re-analyzed %d of %d contractors", researched, len(args.research))
-            if researched < len(args.research):
-                all_ok = False
-        if jobs is not None:
+        if args.analyze is not None:
             handled = 0
-            while handled < jobs:
+            while handled < args.analyze:
                 if orchestrator.analyze_next() == "no job":
                     break
                 handled += 1

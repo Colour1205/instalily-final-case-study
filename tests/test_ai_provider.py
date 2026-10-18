@@ -13,18 +13,11 @@ class FakeProvider(AbstractAIProvider):
     def __init__(self) -> None:
         """Start with no recorded prompts."""
         self.prompts = []
-        self.system_prompts = []
 
     def _generate(self, system_prompt: str, user_prompt: str) -> dict:
         """Record the prompt and return a fixed answer."""
         self.prompts.append(user_prompt)
         return {"summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a"], "draft_email": "e"}
-
-    def _research(self, system_prompt: str, user_prompt: str) -> dict:
-        """Record the prompts and return a fixed research answer."""
-        self.system_prompts.append(system_prompt)
-        self.prompts.append(user_prompt)
-        return {"website": "https://example.com", "about": "a", "people": [], "sources": []}
 
 
 def make_facts(**overrides) -> dict:
@@ -70,33 +63,17 @@ def test_prompt_says_none_for_missing_data():
     assert "- Distance: unknown" in prompt
 
 
-def test_prompt_adds_web_research_when_given():
-    """Without research the prompt says so; with research it lists the website, notes and named people."""
+def test_prompt_matches_what_the_local_model_was_trained_on():
+    """The facts always end with the "Website: not researched" line, exactly as in the training data."""
     provider = FakeProvider()
     provider.analyze(make_facts())
-    assert "- Website: not researched" in provider.prompts[0]
-    research = {"website": "https://example.com", "about": "Roofing since 1998.", "people": ["Ann Lee (owner)"]}
-    provider.analyze(make_facts(), research)
-    assert "- Website: https://example.com" in provider.prompts[1]
-    assert "- About (from their website): Roofing since 1998." in provider.prompts[1]
-    assert "- People named on their website: Ann Lee (owner)" in provider.prompts[1]
-
-
-def test_research_prompt_has_the_contact_details_and_todays_date():
-    """The child gets the name, address and phone to identify the company, and the date for the search."""
-    provider = FakeProvider()
-    provider.research(make_facts())
-    assert provider.prompts[0] == "Contractor: Example Roofing\nAddress: 1 Main St Newark, NJ 07101\nPhone: (555) 000-0000"
-    assert provider.system_prompts[0].startswith("Today is 20")
-    assert "{today}" not in provider.system_prompts[0]
+    assert provider.prompts[0].endswith("- Product lines: Metal, Single-Ply\n- Website: not researched\n")
 
 
 def test_parent_class_cannot_be_used_directly():
-    """AbstractAIProvider has no model, so analyze() and research() fail until a child writes them."""
+    """AbstractAIProvider has no model, so analyze() must fail until a child writes _generate."""
     with pytest.raises(NotImplementedError):
         AbstractAIProvider().analyze(make_facts())
-    with pytest.raises(NotImplementedError):
-        AbstractAIProvider().research(make_facts())
 
 
 def test_review_band_edges():

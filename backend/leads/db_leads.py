@@ -17,14 +17,18 @@ FILTERS = """
 
 COUNT_LEADS = text(f"SELECT count(*) FROM contractors c WHERE {FILTERS}")
 
+# Each weight is 1 or 0, so the chosen score parts are added up (all four give the priority score).
 LIST_LEADS = text(f"""
     SELECT c.gaf_id, c.name, c.rating, c.review_count, c.certification, c.president_club_stars,
            c.commercial_certification, c.services, c.distance_miles, c.priority_score, c.logo_url,
+           c.review_count_adjust_rating, c.gaf_rank, c.specialty, c.distance,
            a.gaf_id IS NOT NULL AS has_analysis, a.summary
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id
     WHERE {FILTERS}
-    ORDER BY c.priority_score DESC, c.gaf_id
+    ORDER BY (:w_rating * c.review_count_adjust_rating + :w_rank * c.gaf_rank
+              + :w_specialty * c.specialty + :w_distance * c.distance) DESC,
+             c.priority_score DESC, c.gaf_id
     LIMIT :limit OFFSET :offset
 """)
 
@@ -38,14 +42,13 @@ MAP_POINTS = text(f"""
 GET_LEAD = text("""
     SELECT c.gaf_id, c.name, c.rating, c.review_count, c.certification, c.president_club_stars,
            c.commercial_certification, c.services, c.distance_miles, c.priority_score, c.logo_url,
+           c.review_count_adjust_rating, c.gaf_rank, c.specialty, c.distance,
            c.phone, c.address, c.profile_url, c.fingerprint, c.updated_at,
            a.gaf_id IS NOT NULL AS has_analysis,
            a.summary, a.why_good_lead, a.pitch, a.talking_points, a.draft_email,
-           a.fingerprint AS analysis_fingerprint,
-           r.gaf_id IS NOT NULL AS has_research, r.website, r.about, r.people, r.sources, r.researched_at
+           a.fingerprint AS analysis_fingerprint
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id
-    LEFT JOIN research r ON r.gaf_id = c.gaf_id
     WHERE c.gaf_id = :gaf_id
 """)
 
@@ -57,9 +60,11 @@ class LeadStore:
         """How many leads match the filters (for paging)."""
         return connection.execute(COUNT_LEADS, filters).scalar_one()
 
-    def list_leads(self, connection: Connection, filters: dict, limit: int, offset: int) -> list[dict]:
-        """One page of leads matching the filters, best priority score first."""
+    def list_leads(self, connection: Connection, filters: dict, weights: dict, limit: int, offset: int) -> list[dict]:
+        """One page of leads matching the filters, ranked by the weighted score parts (best first)."""
         params = dict(filters)
+        for name in weights:
+            params[name] = weights[name]
         params["limit"] = limit
         params["offset"] = offset
         return self.as_dicts(connection.execute(LIST_LEADS, params).mappings().all())

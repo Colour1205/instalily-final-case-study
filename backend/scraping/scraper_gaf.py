@@ -9,7 +9,7 @@ import time
 import httpx
 
 from shared.config import settings
-from shared.score_priority import priority_score
+from shared.score_priority import priority_score, score_parts
 
 log = logging.getLogger(__name__)
 
@@ -115,6 +115,10 @@ class GAFScraper:
             if not contractor["name"]:
                 log.warning("Skipping contractor %s: no name", contractor["gaf_id"])
                 continue
+            # The total and its four parts, so the list can be ranked by any mix of them.
+            parts = score_parts(contractor)
+            for part in parts:
+                contractor[part] = round(parts[part], 2)
             contractor["priority_score"] = priority_score(contractor)
             contractors.append(contractor)
         return contractors
