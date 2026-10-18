@@ -3,9 +3,11 @@
 from sqlalchemy import Connection, text
 
 # Each filter is skipped when it is empty (NULL or false), so one query covers every combination.
-# Several certifications or product lines mean "any of these".
+# Several certifications or product lines mean "any of these". The search matches the name or the address.
 FILTERS = """
-    (CAST(:q AS TEXT) IS NULL OR strpos(lower(c.name), lower(CAST(:q AS TEXT))) > 0)
+    (CAST(:q AS TEXT) IS NULL
+        OR strpos(lower(c.name), lower(CAST(:q AS TEXT))) > 0
+        OR strpos(lower(coalesce(c.address, '')), lower(CAST(:q AS TEXT))) > 0)
     AND (CAST(:certifications AS TEXT[]) IS NULL OR c.certification = ANY(CAST(:certifications AS TEXT[])))
     AND (CAST(:services AS TEXT[]) IS NULL OR c.services && CAST(:services AS TEXT[]))
     AND (CAST(:presidents_club AS BOOLEAN) IS NOT TRUE OR c.president_club_stars > 0)
@@ -39,9 +41,11 @@ GET_LEAD = text("""
            c.phone, c.address, c.profile_url, c.fingerprint, c.updated_at,
            a.gaf_id IS NOT NULL AS has_analysis,
            a.summary, a.why_good_lead, a.pitch, a.talking_points, a.draft_email,
-           a.fingerprint AS analysis_fingerprint
+           a.fingerprint AS analysis_fingerprint,
+           r.gaf_id IS NOT NULL AS has_research, r.website, r.about, r.people, r.sources, r.researched_at
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id
+    LEFT JOIN research r ON r.gaf_id = c.gaf_id
     WHERE c.gaf_id = :gaf_id
 """)
 

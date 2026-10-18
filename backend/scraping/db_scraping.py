@@ -44,6 +44,9 @@ START_RUN = text("""
 """)
 
 
+UPDATE_FINGERPRINT = text("UPDATE contractors SET fingerprint = :fingerprint WHERE gaf_id = :gaf_id")
+
+
 class ScrapeStore:
     """Reads and writes scrape_runs and contractors. Every method runs inside the caller's transaction."""
 
@@ -74,3 +77,7 @@ class ScrapeStore:
     def save_contractor(self, connection: Connection, contractor: dict) -> None:
         """Insert a contractor, or update it if GAF's id is already saved."""
         connection.execute(UPSERT_CONTRACTOR, contractor)
+
+    def update_fingerprint(self, connection: Connection, gaf_id: str, fingerprint: str) -> None:
+        """Store a contractor's fingerprint again, for example after the prompt version changed."""
+        connection.execute(UPDATE_FINGERPRINT, {"gaf_id": gaf_id, "fingerprint": fingerprint})

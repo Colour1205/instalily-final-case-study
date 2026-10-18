@@ -61,5 +61,15 @@ CREATE TABLE IF NOT EXISTS ai_jobs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- What a web search found about a contractor (run on request, not by the daily scrape: web search costs money).
+CREATE TABLE IF NOT EXISTS research (
+    gaf_id        TEXT        PRIMARY KEY REFERENCES contractors (gaf_id) ON DELETE CASCADE,
+    website       TEXT        NOT NULL,
+    about         TEXT        NOT NULL,
+    people        TEXT[]      NOT NULL,
+    sources       TEXT[]      NOT NULL,
+    researched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS ai_jobs_pending ON ai_jobs (updated_at) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS ai_jobs_running ON ai_jobs (updated_at) WHERE status = 'running';

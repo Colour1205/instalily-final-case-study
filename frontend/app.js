@@ -17,6 +17,9 @@ export const ico = {
   target: svg('<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>'),
   filter: svg('<path d="M4 6h16M7 12h10M10 18h4"/>'),
   expand: svg('<path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/>'),
+  up: svg('<path d="M6 15l6-6 6 6"/>'),
+  down: svg('<path d="M6 9l6 6 6-6"/>'),
+  spin: svg('<path d="M12 3a9 9 0 1 0 9 9"/>'),
 };
 
 export const parts = [
@@ -28,6 +31,7 @@ export const parts = [
 
 export const state = { run: 0, page: 0, total: 0, loaded: 0, busy: false, done: false, leads: new Map() };
 const open = { flip: null, engage: null, card: null, lead: null, rect: null };
+const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 let filterTimer = null;
 let scrimTimer = null;
 
@@ -43,6 +47,12 @@ export function esc(text) {
   if (text == null) return '';
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return String(text).replace(/[&<>"']/g, ch => map[ch]);
+}
+
+// A link from the web, only if it is a normal web address (blocks javascript: links).
+function safeUrl(url) {
+  if (/^https?:\/\//i.test(url || '')) return url;
+  return '';
 }
 
 // Star rating that fills to the given rating out of 5.
@@ -291,23 +301,32 @@ function detailHtml(d) {
       <div class="sec"><h4 class="label">Pitch</h4><p>${esc(a.pitch)}</p></div>
       <div class="sec"><h4 class="label">Talking points</h4><ol>${points}</ol></div>`;
   }
+  const r = d.research;
   let contact = '';
+  if (r && r.people.length) contact += `<span>On their website: ${esc(r.people.join(', '))}</span>`;
   if (c.phone) contact += `<a href="tel:${esc(c.phone.replace(/[^\d+]/g, ''))}">${esc(c.phone)}</a>`;
   if (c.address) contact += `<span>${esc(c.address)}${c.maps_url ? ` · <a href="${esc(c.maps_url)}" target="_blank" rel="noopener">Map</a>` : ''}</span>`;
+  if (r && safeUrl(r.website)) contact += `<a href="${esc(safeUrl(r.website))}" target="_blank" rel="noopener">${esc(r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`;
   if (c.profile_url) contact += `<a href="${esc(c.profile_url)}" target="_blank" rel="noopener">GAF profile</a>`;
+  let note = '';
+  if (r) {
+    let links = '';
+    for (let i = 0; i < r.sources.length; i++) {
+      if (safeUrl(r.sources[i])) links += ` <a href="${esc(r.sources[i])}" target="_blank" rel="noopener">[${i + 1}]</a>`;
+    }
+    note = `<p class="note">Website details found by web search on ${esc(r.researched_at.slice(0, 10))}.${links}</p>`;
+  }
   return `
+    <button class="icon x" type="button" aria-label="Close">${ico.close}</button>
     <div class="detail">
-      <div class="detail-head">
-        <div><h2>${esc(d.name)}</h2>${meta(d)}</div>
-        <button class="icon x" type="button" aria-label="Close">${ico.close}</button>
-      </div>
+      <div class="detail-head"><h2>${esc(d.name)}</h2>${meta(d)}</div>
       <div class="tags">${tags(d, true)}</div>
       <div class="score-row">${donut(d.score, 104)}<div class="bars">${bars(d.score)}</div></div>
       ${analysis}
       <div class="sec"><h4 class="label">Contact</h4><div class="contact">${contact}</div>
-        <p class="note">GAF doesn't publish decision-maker names. The first talking point says who to ask for.</p></div>
-      <div class="detail-foot"><button class="pill accent contact-btn" type="button">${ico.mail} Contact</button></div>
-    </div>`;
+        ${note}</div>
+    </div>
+    <div class="detail-foot"><button class="pill accent contact-btn" type="button">${ico.mail} Contact</button></div>`;
 }
 
 // Close the detail window: it shrinks and flips back into its card.
@@ -340,27 +359,39 @@ function saveMe(data) {
   try { localStorage.setItem('lili.me', JSON.stringify(data)); } catch (err) { /* private mode: fine without it */ }
 }
 
-// The draft email with boxes for the rep's own details.
-function letterHtml(draft) {
-  const saved = me();
+// The rep's name or email inside the letter, typed in place; while empty it shows a faint placeholder.
+function sig(key, hint, saved) {
+  return `<span class="sig" contenteditable="plaintext-only" role="textbox" spellcheck="false" aria-label="${hint}" data-k="${key}" data-hint="${hint}">${esc(saved[key] || '')}</span>`;
+}
+
+// The draft email as lines that reveal one after another, signed with the rep's details.
+function letterHtml(draft, saved) {
   const lines = draft.split('\n');
   let subject = '';
   if (lines[0].startsWith('Subject:')) subject = lines.shift().replace('Subject:', '').trim();
-  const box = (key, hint) => `<input data-k="${key}" placeholder="${hint}" value="${esc(saved[key] || '')}" aria-label="${hint}">`;
-  let body = esc(lines.join('\n').trim());
-  body = body.split('[Your name]').join(box('name', 'Your name'));
-  body += `\n${box('email', 'Your email')}`;
-  return { subject, html: `<span class="subject">${esc(subject)}</span>${body}` };
+  while (lines.length && !lines[0].trim()) lines.shift();
+  lines.push('[Your email]');
+  let html = `<div class="ln subject" style="--d:0ms">${esc(subject)}</div>`;
+  for (let i = 0; i < lines.length; i++) {
+    let text = esc(lines[i]);
+    text = text.split('[Your name]').join(sig('name', 'Your name', saved));
+    text = text.split('[Your email]').join(sig('email', 'Your email', saved));
+    html += `<div class="ln${lines[i].trim() ? '' : ' gap'}" style="--d:${(i + 1) * 120}ms">${text}</div>`;
+  }
+  return html;
 }
 
-// The finished email as plain text, with the rep's details filled in.
+// The finished email as plain text; empty signature parts stay as [Your name] / [Your email].
 function letterText(el) {
-  const copy = el.cloneNode(true);
-  for (const input of copy.querySelectorAll('input')) input.replaceWith(input.value || input.placeholder);
-  const subject = copy.querySelector('.subject');
-  const subjectText = subject.textContent;
-  subject.remove();
-  return { subject: subjectText, body: copy.textContent.trim() };
+  const lines = el.querySelectorAll('.ln');
+  if (!lines.length) return null;
+  let body = '';
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].cloneNode(true);
+    for (const part of line.querySelectorAll('.sig')) part.textContent = part.textContent.trim() || `[${part.dataset.hint}]`;
+    body += line.textContent + '\n';
+  }
+  return { subject: lines[0].textContent, body: body.trim() };
 }
 
 // Copy text to the clipboard, with an older fallback.
@@ -402,7 +433,6 @@ function openEngage() {
   const panel = document.createElement('section');
   panel.className = 'engage';
   panel.setAttribute('aria-label', 'Email draft');
-  const letter = letterHtml(d.analysis.draft_email);
   panel.innerHTML = `
     <div class="engage-head">
       <button class="icon back-btn" type="button" aria-label="Back">${ico.back}</button>
@@ -413,7 +443,7 @@ function openEngage() {
         <button class="icon" data-act="mail" type="button" aria-label="Open in mail app">${ico.mail}</button>
       </div>
     </div>
-    <div class="letter">${letter.html}</div>`;
+    <div class="letter"></div>`;
   // Wide: starts hidden behind the detail. Narrow: starts off the right edge and slides over it.
   if (pair.wide) place(panel, pair.flip);
   else place(panel, { left: window.innerWidth, top: pair.panel.top, width: pair.panel.width, height: pair.panel.height });
@@ -426,20 +456,38 @@ function openEngage() {
     place(panel, pair.panel);
   }));
 
+  // A short "drafting" moment, then the lines appear (skipped when the device asks for less motion).
   const letterEl = panel.querySelector('.letter');
-  letterEl.addEventListener('input', () => {
-    const data = {};
-    for (const input of letterEl.querySelectorAll('input')) data[input.dataset.k] = input.value;
+  const write = () => { letterEl.innerHTML = letterHtml(d.analysis.draft_email, me()); };
+  if (calm.matches) write();
+  else {
+    letterEl.innerHTML = `<div class="drafting"><span class="spin">${ico.spin}</span>Drafting…</div>`;
+    setTimeout(() => { if (open.engage === panel) write(); }, 1200);
+  }
+
+  // Typing a name or email in the letter remembers it for the next email. Enter finishes the field.
+  letterEl.addEventListener('input', e => {
+    const part = e.target.closest('.sig');
+    if (!part) return;
+    if (!part.textContent.trim()) part.textContent = ''; // empty again, so the placeholder shows
+    const data = me();
+    data[part.dataset.k] = part.textContent.trim();
     saveMe(data);
+  });
+  letterEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.closest('.sig')) {
+      e.preventDefault();
+      e.target.blur();
+    }
   });
   panel.querySelector('.back-btn').addEventListener('click', () => closeEngage(false));
   panel.querySelector('[data-act="copy"]').addEventListener('click', () => {
     const mail = letterText(letterEl);
-    copyText(`Subject: ${mail.subject}\n\n${mail.body}`);
+    if (mail) copyText(`Subject: ${mail.subject}\n\n${mail.body}`);
   });
   panel.querySelector('[data-act="mail"]').addEventListener('click', () => {
     const mail = letterText(letterEl);
-    window.location.href = `mailto:?subject=${encodeURIComponent(mail.subject)}&body=${encodeURIComponent(mail.body)}`;
+    if (mail) window.location.href = `mailto:?subject=${encodeURIComponent(mail.subject)}&body=${encodeURIComponent(mail.body)}`;
   });
 }
 
@@ -533,9 +581,10 @@ function init() {
   });
   window.addEventListener('resize', onResize);
 
+  // The cards column is the scrolling area, so it is what the end-of-list marker is watched against.
   new IntersectionObserver(entries => {
     if (entries[0].isIntersecting) loadMore();
-  }, { rootMargin: '800px' }).observe($('#sentinel'));
+  }, { root: $('.feed'), rootMargin: '800px' }).observe($('#sentinel'));
 
   fitNav();
   if (document.fonts) document.fonts.ready.then(fitNav);

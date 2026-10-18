@@ -28,6 +28,7 @@ def make_row(**overrides) -> dict:
         "updated_at": datetime(2026, 10, 17, tzinfo=timezone.utc),
         "has_analysis": True, "summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a", "b", "c"],
         "draft_email": "e", "analysis_fingerprint": "abc",
+        "has_research": False, "website": None, "about": None, "people": None, "sources": None, "researched_at": None,
     }
     row.update(overrides)
     return row
@@ -59,6 +60,32 @@ def test_detail_without_analysis_or_address():
     lead = service.lead_detail(make_row(has_analysis=False, address=None))
     assert lead["analysis"] is None
     assert lead["contact"]["maps_url"] is None
+
+
+def test_detail_includes_web_research_when_there_is_some():
+    """Research is null until a contractor is researched, then it carries the website, notes and sources."""
+    assert service.lead_detail(make_row())["research"] is None
+    lead = service.lead_detail(make_row(
+        has_research=True, website="https://example.com", about="Roofing and siding since 1998.",
+        people=["Ann Lee (owner)"], sources=["https://example.com/about"],
+        researched_at=datetime(2026, 10, 17, tzinfo=timezone.utc),
+    ))
+    assert lead["research"]["website"] == "https://example.com"
+    assert lead["research"]["people"] == ["Ann Lee (owner)"]
+    assert lead["research"]["sources"] == ["https://example.com/about"]
+    assert lead["research"]["researched_at"].startswith("2026-10-17")
+
+
+def test_cache_keys_never_mix_up_different_filters():
+    """One value containing a comma is not the same filter as two values; order and letter case do not matter."""
+    base = {"q": None, "certifications": None, "services": None, "presidents_club": False,
+            "min_rating": None, "max_distance": None}
+    two = dict(base, certifications=["Certified", "Master Elite"])
+    one = dict(base, certifications=["Certified,Master Elite"])
+    swapped = dict(base, certifications=["Master Elite", "Certified"])
+    assert service.filters_key(two) != service.filters_key(one)
+    assert service.filters_key(two) == service.filters_key(swapped)
+    assert service.filters_key(dict(base, q="Roof")) == service.filters_key(dict(base, q="roof"))
 
 
 def test_list_route_passes_filters_and_returns_json(monkeypatch):

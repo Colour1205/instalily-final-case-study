@@ -1,5 +1,6 @@
 """Answers the leads API: Redis cache first (cache-aside), then the replica database, shaped as JSON."""
 
+import json
 from urllib.parse import quote_plus
 
 from leads.cache_leads import LeadCache
@@ -62,16 +63,13 @@ class LeadService:
         return self.cache.get_or_build("map:v1:" + self.filters_key(filters), read_points)
 
     def filters_key(self, filters: dict) -> str:
-        """The filters written into a cache key, so different filters never share a cached answer."""
-        q = filters["q"]
-        if q:
-            q = q.lower()
-        certifications = ",".join(sorted(filters["certifications"] or []))
-        services = ",".join(sorted(filters["services"] or []))
-        return (
-            f"q={q}:cert={certifications}:svc={services}:pc={filters['presidents_club']}"
-            f":rating={filters['min_rating']}:dist={filters['max_distance']}"
-        )
+        """The filters written into a cache key as JSON, so two different filter sets can never share an answer."""
+        key = dict(filters)
+        if key["q"]:
+            key["q"] = key["q"].lower()
+        key["certifications"] = sorted(key["certifications"] or [])
+        key["services"] = sorted(key["services"] or [])
+        return json.dumps(key, sort_keys=True)
 
     def get_lead(self, gaf_id: str) -> dict | None:
         """One lead with contact details, score and analysis, or None if the id is unknown."""
@@ -109,7 +107,7 @@ class LeadService:
         }
 
     def lead_detail(self, row: dict) -> dict:
-        """Everything about one lead: the list fields, contact details and the AI analysis."""
+        """Everything about one lead: the list fields, contact details, web research and the AI analysis."""
         lead = self.lead_summary(row)
         maps_url = None
         if row["address"]:
@@ -121,6 +119,15 @@ class LeadService:
             "profile_url": row["profile_url"],
         }
         lead["updated_at"] = row["updated_at"].isoformat()
+        lead["research"] = None
+        if row["has_research"]:
+            lead["research"] = {
+                "website": row["website"],
+                "about": row["about"],
+                "people": row["people"],
+                "sources": row["sources"],
+                "researched_at": row["researched_at"].isoformat(),
+            }
         lead["analysis"] = None
         if row["has_analysis"]:
             lead["analysis"] = {

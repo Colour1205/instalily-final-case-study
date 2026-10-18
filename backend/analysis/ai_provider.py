@@ -3,11 +3,12 @@
 Knows nothing about the database or the job queue.
 """
 
+import datetime
 import hashlib
 import json
 
 # Bump this when the prompt changes, so every contractor gets a fresh analysis.
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 
 # Facts sent to the AI. An analysis is reused until one of these changes.
 AI_FACT_FIELDS = (
@@ -22,7 +23,7 @@ You get facts about one contractor from GAF's directory. Help a rep decide wheth
 
 Rules:
 - Use only the given facts. Never invent names, job titles, revenue, staff numbers, years in business, past projects or current suppliers.
-- Decision-maker names are not published. The first talking point must say which role to ask for (for example the owner, the estimator or the purchasing manager) and why, based on how big the contractor looks.
+- Name a person only if "People named on their website" lists them. The first talking point must say who to ask for: that person and their role, or otherwise the role to ask for (for example the owner, the estimator or the purchasing manager) and why, based on how big the contractor looks.
 - Mention only certifications and awards the contractor holds. Skip any listed as "none".
 - Reviews are given as a range. Use the range, never an exact number.
 - Distance is from the centre of the sales area, not from a warehouse. Never say where the distributor is, and never promise delivery times, prices or terms.
@@ -35,11 +36,11 @@ Background:
 - FORTIFIED means storm-resistant roofs. Metal, Solar, Single-Ply, Asphaltic and Coatings are product lines.
 
 Fields:
-- summary: 2-3 sentences: who, where, how big they look.
+- summary: 1-2 sentences about the business itself: what work it does, where, and how big and well regarded it looks. Use "About (from their website)" when given. Do not start with the company name, and do not name its GAF certification, awards or product lines: the rep already sees those as badges.
 - why_good_lead: 2-3 sentences on why they are worth a call.
 - pitch: 2-3 sentences on which product lines to lead with.
 - talking_points: 3-5 one-sentence points for a first call.
-- draft_email: under 150 words. First line "Subject: ...". Start with "Hello <name> team,". Sign "[Your name]".
+- draft_email: under 150 words. First line "Subject: ...". Start with "Hello <first name>," if a person is named, otherwise "Hello <company name> team,". Sign "[Your name]".
 
 Example
 Facts:
@@ -52,8 +53,11 @@ Facts:
 - Rating: 4.8/5
 - Reviews: 100-499
 - Product lines: Asphaltic, Single-Ply
+- Website: https://harborviewroofing.example
+- About (from their website): Family-owned roofing and siding company serving Hudson County since 1998.
+- People named on their website: Maria Lopez (owner)
 Answer:
-{"summary": "Harborview Roofing is a GAF Master Elite contractor in Hoboken, NJ. A President's Club award and 100-499 reviews suggest a large, busy company working on both homes and commercial roofs.", "why_good_lead": "Master Elite and President's Club put them among GAF's top contractors, and GoldElite certification suggests steady commercial work. A 4.8 rating points to strong demand.", "pitch": "Lead with Golden Pledge-eligible shingle systems for their homes, then single-ply and asphaltic systems for their commercial jobs.", "talking_points": ["Ask for the purchasing manager or the owner: a President's Club contractor this size likely has someone who runs supplier accounts.", "Congratulate them on their President's Club award.", "Ask how they source materials for Golden Pledge jobs.", "Offer single-ply and asphaltic products for their commercial work.", "Ask how they get materials to job sites around Hoboken."], "draft_email": "Subject: Supplying your Golden Pledge and commercial jobs\\n\\nHello Harborview Roofing LLC team,\\n\\nCongratulations on your President's Club award. As a Master Elite and GoldElite contractor, you need reliable supply for both homes and commercial roofs. We stock complete GAF warranty-eligible shingle systems, plus single-ply and asphaltic systems.\\n\\nCould we set up a 15-minute call about your upcoming jobs?\\n\\nBest regards,\\n[Your name]"}
+{"summary": "A family-owned Hoboken roofing and siding company serving Hudson County since 1998, with a large, well-rated homeowner following and a side line in flat commercial roofs.", "why_good_lead": "Master Elite and President's Club put them among GAF's top contractors, and GoldElite certification suggests steady commercial work. A 4.8 rating points to strong demand.", "pitch": "Lead with Golden Pledge-eligible shingle systems for their homes, then single-ply and asphaltic systems for their commercial jobs.", "talking_points": ["Ask for Maria Lopez, the owner named on their website: at a family-owned company she likely chooses suppliers.", "Congratulate them on their President's Club award.", "Ask how they source materials for Golden Pledge jobs.", "Offer single-ply and asphaltic products for their commercial work.", "Ask how they get materials to job sites around Hoboken."], "draft_email": "Subject: Supplying your Golden Pledge and commercial jobs\\n\\nHello Maria,\\n\\nCongratulations on your President's Club award. As a Master Elite and GoldElite contractor, you need reliable supply for both homes and commercial roofs. We stock complete GAF warranty-eligible shingle systems, plus single-ply and asphaltic systems.\\n\\nCould we set up a 15-minute call about your upcoming jobs?\\n\\nBest regards,\\n[Your name]"}
 
 Example
 Facts:
@@ -66,9 +70,29 @@ Facts:
 - Rating: no reviews yet
 - Reviews: none
 - Product lines: none
+- Website: not researched
 Answer:
-{"summary": "Northline Exteriors is a GAF Certified residential contractor in Yonkers, NY. With no reviews yet and no extra product lines, it looks like a smaller or newer business.", "why_good_lead": "As a GAF Certified contractor they need GAF products to offer the System Plus warranty. A smaller contractor may not have a fixed supplier yet.", "pitch": "Lead with complete System Plus-eligible shingle systems that can be ordered in one place.", "talking_points": ["Ask for the owner: at a smaller contractor the owner usually chooses suppliers.", "Ask what kinds of residential jobs they focus on.", "Explain how a full System Plus system can be ordered at once.", "Ask how they get materials to job sites today."], "draft_email": "Subject: Making System Plus jobs easier to supply\\n\\nHello Northline Exteriors team,\\n\\nAs a GAF Certified contractor, you can offer the System Plus warranty, and we can supply every part of those roof systems in one order.\\n\\nWould you be open to a quick call about your upcoming jobs?\\n\\nBest regards,\\n[Your name]"}"""
+{"summary": "A small or newer Yonkers exteriors company with no homeowner reviews yet. The name suggests work beyond roofing, such as siding or windows.", "why_good_lead": "As a GAF Certified contractor they need GAF products to offer the System Plus warranty. A smaller contractor may not have a fixed supplier yet.", "pitch": "Lead with complete System Plus-eligible shingle systems that can be ordered in one place.", "talking_points": ["Ask for the owner: at a smaller contractor the owner usually chooses suppliers.", "Ask what kinds of residential jobs they focus on.", "Explain how a full System Plus system can be ordered at once.", "Ask how they get materials to job sites today."], "draft_email": "Subject: Making System Plus jobs easier to supply\\n\\nHello Northline Exteriors team,\\n\\nAs a GAF Certified contractor, you can offer the System Plus warranty, and we can supply every part of those roof systems in one order.\\n\\nWould you be open to a quick call about your upcoming jobs?\\n\\nBest regards,\\n[Your name]"}"""
 
+
+RESEARCH_PROMPT = """Today is {today}. You research one roofing contractor for sales reps at a roofing materials distributor.
+Use web search to find the contractor's own website (match the name, address or phone), then read it with web fetch. Never use gaf.com.
+Report only what the contractor's own website says:
+- website: its home page address, or "" if you cannot find a site you are sure belongs to them.
+- about: 1-2 plain sentences on what the company says about itself: the work it does, years in business, service area. "" if unknown.
+- people: owners or managers named on its own website, each as "Name (role)". Empty if none are named."""
+
+# The JSON shape of a research answer.
+RESEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "website": {"type": "string"},
+        "about": {"type": "string"},
+        "people": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["website", "about", "people"],
+    "additionalProperties": False,
+}
 
 # The JSON shape every AI provider must return (a JSON Schema, which Claude's structured output follows).
 ANALYSIS_SCHEMA = {
@@ -86,10 +110,10 @@ ANALYSIS_SCHEMA = {
 
 
 class AbstractAIProvider:
-    """Turns one contractor's facts into a sales analysis. Not used directly: each child writes _generate."""
+    """Turns contractor facts into web research and a sales analysis. Each child writes _generate and _research."""
 
-    def analyze(self, facts: dict) -> dict:
-        """Build the prompt from one contractor's facts and return the model's analysis as a dictionary."""
+    def analyze(self, facts: dict, research: dict | None = None) -> dict:
+        """Build the prompt from one contractor's facts (plus web research, if any) and return the model's analysis."""
         stars = int(facts["president_club_stars"])
         presidents_club = "none"
         if stars == 1:
@@ -114,6 +138,12 @@ class AbstractAIProvider:
             f"Reviews: {self.review_band(facts['review_count'])}",
             f"Product lines: {', '.join(facts['services']) or 'none'}",
         ]
+        if research is None:
+            lines.append("Website: not researched")
+        else:
+            lines.append(f"Website: {research['website'] or 'not found'}")
+            lines.append(f"About (from their website): {research['about'] or 'not found'}")
+            lines.append(f"People named on their website: {', '.join(research['people']) or 'none'}")
         prompt = "Facts:\n"
         for line in lines:
             prompt += "- " + line + "\n"
@@ -122,6 +152,15 @@ class AbstractAIProvider:
     def _generate(self, system_prompt: str, user_prompt: str) -> dict:
         """Send the prompts to the model and return its JSON answer. Every child class must write its own version."""
         raise NotImplementedError("Each AI provider must write _generate")
+
+    def research(self, facts: dict) -> dict:
+        """Look the contractor up on the web. Returns website, about, people and the sources that were read."""
+        prompt = f"Contractor: {facts['name']}\nAddress: {facts['address'] or 'unknown'}\nPhone: {facts['phone'] or 'unknown'}"
+        return self._research(RESEARCH_PROMPT.format(today=datetime.date.today().isoformat()), prompt)
+
+    def _research(self, system_prompt: str, user_prompt: str) -> dict:
+        """Search the web and return the RESEARCH_SCHEMA answer plus "sources". Every child class must write its own."""
+        raise NotImplementedError("Each AI provider must write _research")
 
     def review_band(self, review_count: int) -> str:
         """Group a review count into none, 1-9, 10-49, 50-99, 100-499 or 500+."""
