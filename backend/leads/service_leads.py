@@ -4,7 +4,7 @@ import json
 from urllib.parse import quote_plus
 
 from leads.cache_leads import LeadCache
-from leads.db_leads import LeadStore
+from leads.db_access_leads import LeadStore
 from shared.config import settings
 from shared.db_postgres import replica_engine
 
@@ -31,11 +31,15 @@ class LeadService:
 
         def read_page() -> dict:
             """Read this page from the replica (only one request per key does this at a time)."""
-            with replica_engine.connect() as connection:
+            connection = replica_engine.connect()
+            try:
                 # One snapshot for both queries, so the total always matches the page.
                 connection.execution_options(isolation_level="REPEATABLE READ")
                 total = self.store.count_leads(connection, filters)
                 rows = self.store.list_leads(connection, filters, weights, limit, (page - 1) * limit)
+            finally:
+                # Read only, so nothing to commit: close() hands the connection back to the pool.
+                connection.close()
             leads = []
             for row in rows:
                 leads.append(self.lead_summary(row))
@@ -50,8 +54,11 @@ class LeadService:
 
         def read_points() -> dict:
             """Read every matching lead's position from the replica."""
-            with replica_engine.connect() as connection:
+            connection = replica_engine.connect()
+            try:
                 rows = self.store.map_points(connection, filters)
+            finally:
+                connection.close()
             points = []
             for row in rows:
                 points.append({
@@ -91,8 +98,11 @@ class LeadService:
 
         def read_lead() -> dict | None:
             """Read this lead from the replica (only one request per lead does this at a time)."""
-            with replica_engine.connect() as connection:
+            connection = replica_engine.connect()
+            try:
                 row = self.store.get_lead(connection, gaf_id)
+            finally:
+                connection.close()
             if row is None:
                 return None
             return self.lead_detail(row)
@@ -115,7 +125,6 @@ class LeadService:
             "services": row["services"],
             "distance_miles": self.to_float(row["distance_miles"]),
             "logo_url": row["logo_url"],
-            "has_analysis": row["has_analysis"],
             "summary": row["summary"],
             "score": score,
         }
@@ -132,9 +141,9 @@ class LeadService:
             "maps_url": maps_url,
             "profile_url": row["profile_url"],
         }
-        lead["updated_at"] = row["updated_at"].isoformat()
         lead["analysis"] = None
-        if row["has_analysis"]:
+        # analyses.summary is NOT NULL, so NULL here means the join found no analysis yet.
+        if row["summary"] is not None:
             lead["analysis"] = {
                 "summary": row["summary"],
                 "why_good_lead": row["why_good_lead"],

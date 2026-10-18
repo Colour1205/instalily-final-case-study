@@ -4,6 +4,7 @@ It is the only file that knows the whole flow and the only one that opens transa
 many servers at once: they coordinate only through the shared PostgreSQL database.
 
 Run from the backend folder:
+    python orchestrator.py --setup-db      create any missing tables and indexes, then exit (once per deploy; main.py does it)
     python orchestrator.py                 run forever (daily scrape + AI jobs)
     python orchestrator.py --scrape-now    scrape every ZIP now, then exit
     python orchestrator.py --analyze 5     finish 5 AI jobs, then exit
@@ -20,10 +21,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from analysis.ai_claude import ClaudeProvider
+from analysis.ai_ollama import OllamaProvider
 from analysis.ai_provider import AbstractAIProvider
-from analysis.db_analysis import AnalysisStore
+from analysis.db_access_analysis import AnalysisStore
 from analysis.queue_ai_jobs import AIJobQueue
-from scraping.db_scraping import ScrapeStore
+from scraping.db_access_scraping import ScrapeStore
 from scraping.scraper_gaf import GAFScraper
 from shared.config import settings
 from shared.db_postgres import SCHEMA_FILE, primary_engine
@@ -48,68 +50,97 @@ class Orchestrator:
             min_hours = 0
         all_ok = True
         for zip_code in settings.scrape_zip_codes:
-            with primary_engine.begin() as connection:
+            # Every transaction below: commit() saves it; close() returns the connection and undoes anything unsaved.
+            connection = primary_engine.connect()
+            try:
                 run_id = self.scrape_store.start_run(connection, zip_code, min_hours)
+                connection.commit()
+            finally:
+                connection.close()
             if run_id is None:
                 log.info("ZIP %s: skipped, scraped recently", zip_code)
                 continue
+            status = "failed"
             try:
                 contractors = GAFScraper(zip_code).fetch()
                 queued = 0
                 for contractor in contractors:
                     contractor["fingerprint"] = self.provider.fingerprint(contractor)
-                    # Saving a contractor and queueing its AI job succeed or fail together.
-                    with primary_engine.begin() as connection:
+                    # A fresh connection per contractor, so one dropped connection does not stop the whole scrape.
+                    connection = primary_engine.connect()
+                    try:
                         self.scrape_store.save_contractor(connection, contractor)
                         if self.queue.add(connection, contractor["gaf_id"], contractor["fingerprint"]):
                             queued += 1
-                with primary_engine.begin() as connection:
-                    self.scrape_store.finish_run(connection, run_id, "done")
+                        # Saving a contractor and queueing its AI job succeed or fail together.
+                        connection.commit()
+                    finally:
+                        connection.close()
+                status = "done"
                 log.info("ZIP %s: saved %d contractors, queued %d AI jobs", zip_code, len(contractors), queued)
-            except KeyboardInterrupt:
-                with primary_engine.begin() as connection:
-                    self.scrape_store.finish_run(connection, run_id, "failed")
-                raise
             except Exception:
-                with primary_engine.begin() as connection:
-                    self.scrape_store.finish_run(connection, run_id, "failed")
                 log.exception("ZIP %s: scrape failed", zip_code)
                 all_ok = False
+            finally:
+                # Also runs on Ctrl+C, so a scrape run is never left as 'running'.
+                connection = primary_engine.connect()
+                try:
+                    self.scrape_store.finish_run(connection, run_id, status)
+                    connection.commit()
+                finally:
+                    connection.close()
         return all_ok
 
     def analyze_next(self) -> str:
         """Claim one AI job and finish it. Returns "no job", "analyzed" or "failed"."""
-        with primary_engine.begin() as connection:
+        connection = primary_engine.connect()
+        try:
             job = self.queue.claim(connection)
-            if job is None:
-                return "no job"
-            facts = self.analysis_store.get_facts(connection, job["gaf_id"])
+            if job is not None:
+                facts = self.analysis_store.get_facts(connection, job["gaf_id"])
+            connection.commit()
+        finally:
+            connection.close()
+        if job is None:
+            return "no job"
 
+        result = "failed"
+        error_text = "Stopped"
         try:
             # The slow AI call happens outside any transaction, so it never holds database locks.
             analysis = self.provider.analyze(facts)
-            # A missing or null field makes this save fail, which sends the job back to the queue.
-            with primary_engine.begin() as connection:
-                if not self.queue.finish(connection, job):
-                    log.warning("%s: job taken over by another worker, result dropped", facts["name"])
-                    return "analyzed"
-                self.analysis_store.save_analysis(
-                    connection, job["gaf_id"], analysis, self.provider.fingerprint(facts)
-                )
-                # If the facts changed while the AI was working, queue another job for the new facts.
-                latest = self.analysis_store.get_facts(connection, job["gaf_id"])
-                self.queue.add(connection, job["gaf_id"], self.provider.fingerprint(latest))
-        except KeyboardInterrupt:
-            with primary_engine.begin() as connection:
-                self.queue.fail(connection, job, "Stopped")
-            raise
+            connection = primary_engine.connect()
+            try:
+                still_ours = self.queue.finish(connection, job)
+                if still_ours:
+                    # A missing or null field makes this save fail, which sends the job back to the queue.
+                    self.analysis_store.save_analysis(
+                        connection, job["gaf_id"], analysis, self.provider.fingerprint(facts)
+                    )
+                    # If the facts changed while the AI was working, queue another job for the new facts.
+                    latest = self.analysis_store.get_facts(connection, job["gaf_id"])
+                    self.queue.add(connection, job["gaf_id"], self.provider.fingerprint(latest))
+                connection.commit()
+            finally:
+                connection.close()
+            result = "analyzed"
+            if still_ours:
+                log.info("%s: analyzed", facts["name"])
+            else:
+                log.warning("%s: job taken over by another worker, result dropped", facts["name"])
         except Exception as error:
-            with primary_engine.begin() as connection:
-                self.queue.fail(connection, job, repr(error))
+            error_text = repr(error)
             log.warning("%s: attempt %d failed: %r", facts["name"], job["attempts"], error)
-            return "failed"
-        log.info("%s: analyzed", facts["name"])
-        return "analyzed"
+        finally:
+            # Also runs on Ctrl+C, so an unfinished job never stays 'running': it is retried later (with backoff).
+            if result == "failed":
+                connection = primary_engine.connect()
+                try:
+                    self.queue.fail(connection, job, error_text)
+                    connection.commit()
+                finally:
+                    connection.close()
+        return result
 
     def analysis_loop(self, stop: threading.Event) -> None:
         """Keep finishing AI jobs until told to stop. Pause when there is no job, and longer after a failure."""
@@ -129,6 +160,7 @@ class Orchestrator:
 def main() -> None:
     """Read the command line, then scrape, analyze, or run forever."""
     parser = argparse.ArgumentParser(description="Runs the GAF scrape and the AI analysis jobs.")
+    parser.add_argument("--setup-db", action="store_true", help="create any missing tables and indexes, then exit")
     parser.add_argument("--scrape-now", action="store_true", help="scrape every ZIP now, then exit")
     parser.add_argument("--analyze", type=int, metavar="N", help="finish N AI jobs, then exit")
     args = parser.parse_args()
@@ -136,19 +168,30 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy_logger in ("httpx", "httpx2"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+    # Only this step touches table structure. It locks tables even when nothing changes, so busy workers never run it.
+    if args.setup_db:
+        connection = primary_engine.connect()
+        try:
+            connection.exec_driver_sql(SCHEMA_FILE.read_text(encoding="utf-8"))
+            connection.commit()
+        finally:
+            connection.close()
+        log.info("Tables are ready")
+        return
+
     # Treat a stop signal like Ctrl+C, so jobs and scrape runs are marked properly before exiting.
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     if hasattr(signal, "SIGBREAK"):
         signal.signal(signal.SIGBREAK, signal.default_int_handler)
-
-    with primary_engine.begin() as connection:
-        connection.exec_driver_sql(SCHEMA_FILE.read_text(encoding="utf-8"))
 
     # Strategy pattern: the AI provider is picked here; everything else only uses the parent class.
     if settings.ai_provider == "claude":
         provider = ClaudeProvider(
             settings.claude_model, settings.claude_effort, settings.claude_timeout_seconds, settings.anthropic_api_key
         )
+    elif settings.ai_provider == "ollama":
+        provider = OllamaProvider(settings.ollama_url, settings.ollama_model, settings.ollama_timeout_seconds)
     else:
         raise ValueError(f"Unknown AI provider: {settings.ai_provider}")
     orchestrator = Orchestrator(provider)

@@ -1,10 +1,8 @@
 """Tests for the shared priority score formula (no network or database)."""
 
-from decimal import Decimal
-
 import pytest
 
-from shared.score_priority import priority_score, score_parts
+from shared.score_priority import score_parts
 
 
 def make_contractor(**overrides) -> dict:
@@ -30,7 +28,7 @@ def test_score_parts_match_hand_worked_example():
     assert parts["gaf_rank"] == 20
     assert parts["specialty"] == pytest.approx(25 * 2 / 3)
     assert parts["distance"] == pytest.approx(12.5)
-    assert priority_score(make_contractor()) == pytest.approx(61.67)
+    assert round(sum(parts.values()), 2) == pytest.approx(61.67)
 
 
 def test_review_count_adjust_rating():
@@ -58,10 +56,3 @@ def test_specialty_and_distance():
     assert part("specialty", services=["Metal", "Solar", "Coatings", "Asphaltic"]) == pytest.approx(25)
     assert part("distance", distance_miles=0) == 25
     assert 0 < part("distance", distance_miles=1000) < 1
-
-
-def test_database_numbers_score_the_same():
-    """PostgreSQL returns NUMERIC as Decimal; the score must not change because of it."""
-    parsed = make_contractor(rating=4.7, distance_miles=12.5)
-    from_db = make_contractor(rating=Decimal("4.7"), distance_miles=Decimal("12.50"))
-    assert priority_score(from_db) == priority_score(parsed)

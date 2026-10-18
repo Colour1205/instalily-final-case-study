@@ -9,7 +9,7 @@ import time
 import httpx
 
 from shared.config import settings
-from shared.score_priority import priority_score, score_parts
+from shared.score_priority import score_parts
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class GAFScraper:
             parts = score_parts(contractor)
             for part in parts:
                 contractor[part] = round(parts[part], 2)
-            contractor["priority_score"] = priority_score(contractor)
+            contractor["priority_score"] = round(sum(parts.values()), 2)
             contractors.append(contractor)
         return contractors
 

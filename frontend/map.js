@@ -24,12 +24,6 @@ function color(name) {
 // Score bands for the dots (scores today run from about 12 to 68).
 const bands = [[40, '--accent', '40+'], [25, '--p3', '25-39'], [0, '--p4', 'Under 25']];
 
-// The colour of a lead's dot: higher scores get the stronger colour.
-function scoreColor(score) {
-  for (const [min, name] of bands) if (score >= min) return color(name);
-  return color('--p4');
-}
-
 // A Leaflet map with the themed tiles and an empty layer for the markers.
 function makeMap(el, opts) {
   const map = L.map(el, opts);
@@ -53,9 +47,14 @@ function draw(map, popups) {
     .bindTooltip(`ZIP ${esc(data.center.zip)} · ${data.radius_miles} mi`);
   const bounds = L.latLng(center).toBounds(ring.getRadius() * 2);
   for (const p of data.points) {
+    // Higher scores get the stronger colour (the last band starts at 0, so every score finds one).
+    let fill = '';
+    for (const [min, name] of bands) {
+      if (!fill && p.score >= min) fill = color(name);
+    }
     const dot = L.circleMarker([p.lat, p.lng], {
       radius: popups ? 6 : 3.5, weight: popups ? 1.5 : 0, color: color('--card'),
-      fillColor: scoreColor(p.score), fillOpacity: 0.9, interactive: popups,
+      fillColor: fill, fillOpacity: 0.9, interactive: popups,
     }).addTo(map.marks);
     if (popups) {
       dot.bindPopup(`<strong>${esc(p.name)}</strong><span class="label">Score ${Math.round(p.score)}</span>

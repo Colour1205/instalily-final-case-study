@@ -94,6 +94,15 @@ def test_fingerprint_changes_only_for_facts_the_ai_uses():
     assert provider.fingerprint(make_facts(rating=4.9)) != base
 
 
+def test_fingerprint_changes_with_the_model():
+    """The same facts answered by a different model need a new analysis."""
+    first = FakeProvider()
+    first.model = "claude-haiku-5-5"
+    second = FakeProvider()
+    second.model = "lili-analyst-1.7b"
+    assert first.fingerprint(make_facts()) != second.fingerprint(make_facts())
+
+
 def test_fingerprint_is_the_same_for_database_rows():
     """Decimal numbers and a different services order from PostgreSQL give the same fingerprint."""
     provider = FakeProvider()

@@ -1,6 +1,8 @@
--- The one PostgreSQL database for the lead platform. Safe to run more than once.
+-- The one PostgreSQL database for the lead platform. Run once per deploy by `orchestrator.py --setup-db`
+-- (main.py does this), never by every worker: running it locks tables, even when nothing changes.
+-- Safe to run more than once. It only creates what is missing; changing an existing table needs a migration.
 
--- If several servers start at the same moment, they take turns running this file.
+-- If two setup runs start at the same moment, they take turns running this file.
 SELECT pg_advisory_xact_lock(7243001);
 
 CREATE TABLE IF NOT EXISTS scrape_runs (
@@ -15,36 +17,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS scrape_runs_one_running_per_zip
     ON scrape_runs (zip_code) WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS contractors (
-    gaf_id                   TEXT         PRIMARY KEY,
-    name                     TEXT         NOT NULL,
-    rating                   NUMERIC(2,1),
-    review_count             INTEGER      NOT NULL DEFAULT 0,
-    certification            TEXT,
-    president_club_stars     SMALLINT     NOT NULL DEFAULT 0,
-    commercial_certification TEXT,
-    services                 TEXT[]       NOT NULL DEFAULT '{}',
-    phone                    TEXT,
-    address                  TEXT,
-    distance_miles           NUMERIC(5,2),
-    latitude                 DOUBLE PRECISION,
-    longitude                DOUBLE PRECISION,
-    profile_url              TEXT,
-    logo_url                 TEXT,
-    fingerprint              TEXT         NOT NULL,
-    priority_score           NUMERIC(5,2) NOT NULL,
-    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT now()
+    gaf_id                     TEXT         PRIMARY KEY,
+    name                       TEXT         NOT NULL,
+    rating                     NUMERIC(2,1),
+    review_count               INTEGER      NOT NULL DEFAULT 0,
+    certification              TEXT,
+    president_club_stars       SMALLINT     NOT NULL DEFAULT 0,
+    commercial_certification   TEXT,
+    services                   TEXT[]       NOT NULL DEFAULT '{}',
+    phone                      TEXT,
+    address                    TEXT,
+    distance_miles             NUMERIC(5,2),
+    latitude                   DOUBLE PRECISION,
+    longitude                  DOUBLE PRECISION,
+    profile_url                TEXT,
+    logo_url                   TEXT,
+    fingerprint                TEXT         NOT NULL,
+    priority_score             NUMERIC(5,2) NOT NULL,
+    -- The four 25-point parts of priority_score, so the list can be ranked by any of them.
+    review_count_adjust_rating NUMERIC(5,2) NOT NULL DEFAULT 0,
+    gaf_rank                   NUMERIC(5,2) NOT NULL DEFAULT 0,
+    specialty                  NUMERIC(5,2) NOT NULL DEFAULT 0,
+    distance                   NUMERIC(5,2) NOT NULL DEFAULT 0,
+    updated_at                 TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
--- The four 25-point parts of priority_score, so the list can be ranked by any of them.
--- ADD COLUMN IF NOT EXISTS also upgrades databases created before these columns existed.
-ALTER TABLE contractors
-    ADD COLUMN IF NOT EXISTS review_count_adjust_rating NUMERIC(5,2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS gaf_rank                   NUMERIC(5,2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS specialty                  NUMERIC(5,2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS distance                   NUMERIC(5,2) NOT NULL DEFAULT 0;
-
--- gaf_id breaks ties so pages of the ranked list stay in a stable order.
-CREATE INDEX IF NOT EXISTS contractors_priority_score ON contractors (priority_score DESC, gaf_id);
 CREATE INDEX IF NOT EXISTS contractors_certification ON contractors (certification);
 
 -- One analysis per contractor; a new one replaces the old one.

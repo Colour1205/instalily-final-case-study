@@ -43,10 +43,14 @@ class Settings(BaseSettings):
     scrape_stuck_minutes: int = 60
 
     anthropic_api_key: str = ""
-    ai_provider: str = "claude"
+    ai_provider: str = "ollama"
     claude_model: str = "claude-haiku-5-5"
     claude_effort: str = "medium"
     claude_timeout_seconds: float = 60.0
+    # The fine-tuned model on the other PC, reached over Tailscale ("lili-analyst" always names the current version).
+    ollama_url: str = "http://100.100.1.0:11434"
+    ollama_model: str = "lili-analyst"
+    ollama_timeout_seconds: float = 120.0
     analysis_threads: int = 4
     ai_max_attempts: int = 3
     ai_stuck_minutes: int = 15
@@ -60,9 +64,9 @@ class Settings(BaseSettings):
     coveo_api_key: str = "xx3cfe6ca4-11f2-45b6-83ad-41e053e06504"
 
     def database_url(self, replica: bool = False) -> URL:
-        """Build the PostgreSQL address for the primary, or for the replica when one is set."""
+        """Build the PostgreSQL address for the primary, or for the replica."""
         host = self.postgres_host
-        if replica and self.postgres_replica_host:
+        if replica:
             host = self.postgres_replica_host
         return URL.create(
             "postgresql+psycopg",

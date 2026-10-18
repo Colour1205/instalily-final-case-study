@@ -31,7 +31,7 @@ export const parts = [
   ['distance', 'Distance', 'var(--p4)'],
 ];
 
-export const state = { run: 0, page: 0, total: 0, loaded: 0, busy: false, done: false, leads: new Map() };
+export const state = { run: 0, page: 0, loaded: 0, busy: false, done: false, leads: new Map() };
 const open = { flip: null, engage: null, card: null, lead: null, rect: null };
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 let filterTimer = null;
@@ -52,7 +52,7 @@ export function esc(text) {
 }
 
 // Star rating that fills to the given rating out of 5.
-export function stars(rating) {
+function stars(rating) {
   const pct = Math.max(0, Math.min(100, (rating / 5) * 100));
   return `<span class="stars" aria-label="${rating} out of 5">★★★★★<b style="width:${pct}%">★★★★★</b></span>`;
 }
@@ -69,23 +69,6 @@ export function donut(score, size) {
   return `<svg class="donut" width="${size}" height="${size}" viewBox="0 0 42 42" role="img" aria-label="Score ${Math.round(score.total)}">
     <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--soft)" stroke-width="5"/>${segs}
     <text x="21" y="21" text-anchor="middle" dominant-baseline="central">${Math.round(score.total)}</text></svg>`;
-}
-
-// Colour key for the donut.
-function legend() {
-  let rows = '';
-  for (const [, label, color] of parts) rows += `<span><i style="background:${color}"></i>${label}</span>`;
-  return `<div class="legend">${rows}</div>`;
-}
-
-// Score part bars for the detail window.
-function bars(score) {
-  let rows = '';
-  for (const [key, label, color] of parts) {
-    const val = score[key] || 0;
-    rows += `<div class="bar"><span>${label}</span><span class="track"><i style="width:${(val / 25) * 100}%;background:${color}"></i></span><span>${val.toFixed(1)}</span></div>`;
-  }
-  return rows;
 }
 
 // Small badges: certification, awards, commercial work and product lines.
@@ -108,7 +91,7 @@ function meta(lead) {
 }
 
 // Short message at the bottom of the screen.
-export function toast(text) {
+function toast(text) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = text;
@@ -151,15 +134,17 @@ export function query() {
 
 // One lead card for the list.
 function card(lead) {
+  // Colour key for the donut.
+  let legend = '';
+  for (const [, label, color] of parts) legend += `<span><i style="background:${color}"></i>${label}</span>`;
   const el = document.createElement('article');
   el.className = 'card';
-  el.dataset.id = lead.gaf_id;
   el.innerHTML = `
     <div class="card-top"><h3>${esc(lead.name)}</h3></div>
     ${meta(lead)}
     <div class="tags">${tags(lead, false)}</div>
     <p>${esc(lead.summary || 'Analysis on its way.')}</p>
-    <div class="card-foot">${donut(lead.score, 66)}${legend()}
+    <div class="card-foot">${donut(lead.score, 66)}<div class="legend">${legend}</div>
       <button class="icon open-btn" type="button" aria-label="Open ${esc(lead.name)}">${ico.arrow}</button></div>`;
   el.querySelector('.open-btn').addEventListener('click', () => openLead(lead.gaf_id, el));
   return el;
@@ -182,9 +167,7 @@ async function loadMore() {
     const qs = query();
     const data = await api(`/v1/leads?${qs}${qs ? '&' : ''}page=${state.page + 1}&limit=24`);
     if (run !== state.run) return;
-    for (const g of ghosts) g.remove();
     state.page = data.page;
-    state.total = data.total;
     for (const lead of data.leads) {
       state.leads.set(lead.gaf_id, lead);
       list.append(card(lead));
@@ -327,12 +310,17 @@ function detailHtml(d) {
   if (c.phone) contact += `<a href="tel:${esc(c.phone.replace(/[^\d+]/g, ''))}">${esc(c.phone)}</a>`;
   if (c.address) contact += `<span>${esc(c.address)}${c.maps_url ? ` · <a href="${esc(c.maps_url)}" target="_blank" rel="noopener">Map</a>` : ''}</span>`;
   if (c.profile_url) contact += `<a href="${esc(c.profile_url)}" target="_blank" rel="noopener">GAF profile</a>`;
+  let bars = '';
+  for (const [key, label, color] of parts) {
+    const val = d.score[key] || 0;
+    bars += `<div class="bar"><span>${label}</span><span class="track"><i style="width:${(val / 25) * 100}%;background:${color}"></i></span><span>${val.toFixed(1)}</span></div>`;
+  }
   return `
     <button class="icon x" type="button" aria-label="Close">${ico.close}</button>
     <div class="detail">
       <div class="detail-head"><h2>${esc(d.name)}</h2>${meta(d)}</div>
       <div class="tags">${tags(d, true)}</div>
-      <div class="score-row">${donut(d.score, 104)}<div class="bars">${bars(d.score)}</div></div>
+      <div class="score-row">${donut(d.score, 104)}<div class="bars">${bars}</div></div>
       ${analysis}
       <div class="sec"><h4 class="label">Contact</h4><div class="contact">${contact}</div></div>
     </div>
@@ -364,11 +352,6 @@ function me() {
   try { return JSON.parse(localStorage.getItem('lili.me')) || {}; } catch (err) { return {}; }
 }
 
-// Save the rep's name and email in this browser.
-function saveMe(data) {
-  try { localStorage.setItem('lili.me', JSON.stringify(data)); } catch (err) { /* private mode: fine without it */ }
-}
-
 // The rep's name or email inside the letter, typed in place; while empty it shows a faint placeholder.
 function sig(key, hint, saved) {
   return `<span class="sig" contenteditable="plaintext-only" role="textbox" spellcheck="false" aria-label="${hint}" data-k="${key}" data-hint="${hint}">${esc(saved[key] || '')}</span>`;
@@ -386,7 +369,7 @@ function letterHtml(draft, saved) {
     let text = esc(lines[i]);
     text = text.split('[Your name]').join(sig('name', 'Your name', saved));
     text = text.split('[Your email]').join(sig('email', 'Your email', saved));
-    html += `<div class="ln${lines[i].trim() ? '' : ' gap'}" style="--d:${(i + 1) * 120}ms">${text}</div>`;
+    html += `<div class="ln" style="--d:${(i + 1) * 120}ms">${text}</div>`;
   }
   return html;
 }
@@ -482,7 +465,7 @@ function openEngage() {
     if (!part.textContent.trim()) part.textContent = ''; // empty again, so the placeholder shows
     const data = me();
     data[part.dataset.k] = part.textContent.trim();
-    saveMe(data);
+    try { localStorage.setItem('lili.me', JSON.stringify(data)); } catch (err) { /* private mode: fine without it */ }
   });
   letterEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.closest('.sig')) {

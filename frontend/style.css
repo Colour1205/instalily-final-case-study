@@ -79,6 +79,7 @@ button { cursor: pointer; }
   color: var(--mute);
 }
 
+/* Frosted glass: the nav, its menu and the search bar. */
 .glass {
   background: var(--glass);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
@@ -100,7 +101,7 @@ button { cursor: pointer; }
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
-  transition: background 0.2s, border-color 0.2s;
+  transition: border-color 0.2s;
 }
 .pill:hover { border-color: var(--ink); }
 .pill.solid { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -142,10 +143,6 @@ button { cursor: pointer; }
   align-items: center;
   gap: 12px;
   padding: 0 12px 0 18px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--line);
 }
 .brand {
   display: flex;
@@ -173,10 +170,6 @@ button { cursor: pointer; }
   display: grid;
   gap: 8px;
   padding: 12px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--line);
 }
 .menu-list .pill { justify-content: center; }
 
@@ -241,10 +234,6 @@ legend { padding: 0; margin-bottom: 8px; }
   gap: 10px;
   height: 56px;
   padding: 0 8px 0 14px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--line);
 }
 .search input {
   flex: 1;
@@ -273,7 +262,7 @@ legend { padding: 0; margin-bottom: 8px; }
   padding: 16px;
   background: var(--card);
   border: 1px solid var(--line);
-  transition: border-color 0.2s, transform 0.2s var(--ease);
+  transition: border-color 0.2s;
 }
 .card:hover { border-color: var(--ink); }
 .card.gone { visibility: hidden; }
@@ -461,7 +450,6 @@ a.icon { text-decoration: none; }
   position: relative;
   width: min(100%, 320px, calc((100vh - var(--nav-top) - var(--nav-h) - var(--gap) * 2) * 9 / 16));
   aspect-ratio: 9 / 16;
-  overflow: hidden;
   background: #0a0a0a;
   color: #f2f3ec;
   border: 1px solid var(--line);

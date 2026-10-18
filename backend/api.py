@@ -20,15 +20,5 @@ app.include_router(routes_leads.router)
 # Lets the frontend on GitHub Pages read the API (read-only: GET requests only).
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET"])
 
-
-@app.middleware("http")
-async def check_for_new_files(request, call_next):
-    """Make browsers ask for newer page files on each visit (a quick "not modified" reply if unchanged)."""
-    response = await call_next(request)
-    if not request.url.path.startswith("/v1"):
-        response.headers["Cache-Control"] = "no-cache"
-    return response
-
-
 # Mounted last so /v1 and /docs are matched first; everything else is the LiLi web page.
 app.mount("/", StaticFiles(directory=FRONTEND_FOLDER, html=True), name="frontend")

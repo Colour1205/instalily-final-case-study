@@ -3,7 +3,7 @@
 from sqlalchemy import Connection, text
 
 GET_FACTS = text("""
-    SELECT gaf_id, name, rating, review_count, certification, president_club_stars,
+    SELECT name, rating, review_count, certification, president_club_stars,
            commercial_certification, services, address, distance_miles
     FROM contractors WHERE gaf_id = :gaf_id
 """)

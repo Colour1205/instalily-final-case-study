@@ -1,6 +1,5 @@
 """Tests for the leads API: the JSON shapes and the /v1 routes, using made-up data (no database)."""
 
-from datetime import datetime, timezone
 from decimal import Decimal
 
 import threading
@@ -27,8 +26,7 @@ def make_row(**overrides) -> dict:
         "distance": Decimal("12.50"),
         "logo_url": None, "phone": "(555) 000-0000", "address": "1 Main St Newark, NJ 07101",
         "profile_url": "https://example.com/42", "fingerprint": "abc",
-        "updated_at": datetime(2026, 10, 17, tzinfo=timezone.utc),
-        "has_analysis": True, "summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a", "b", "c"],
+        "summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a", "b", "c"],
         "draft_email": "e", "analysis_fingerprint": "abc",
     }
     row.update(overrides)
@@ -58,7 +56,7 @@ def test_detail_adds_contact_details_and_analysis():
 
 def test_detail_without_analysis_or_address():
     """A lead with no analysis yet still shows, with analysis set to null."""
-    lead = service.lead_detail(make_row(has_analysis=False, address=None))
+    lead = service.lead_detail(make_row(summary=None, address=None))
     assert lead["analysis"] is None
     assert lead["contact"]["maps_url"] is None
 

@@ -1,4 +1,4 @@
-"""PostgreSQL access for the leads API: read-only queries, run on the replica. SQL only."""
+"""PostgreSQL access for the leads API: read-only SQL, run on the connection it is given (the service uses the replica)."""
 
 from sqlalchemy import Connection, text
 
@@ -17,12 +17,16 @@ FILTERS = """
 
 COUNT_LEADS = text(f"SELECT count(*) FROM contractors c WHERE {FILTERS}")
 
+# One lead as the ranked list shows it; the detail query adds contact details and the rest of the analysis.
+LEAD_COLUMNS = """
+    c.gaf_id, c.name, c.rating, c.review_count, c.certification, c.president_club_stars,
+    c.commercial_certification, c.services, c.distance_miles, c.priority_score, c.logo_url,
+    c.review_count_adjust_rating, c.gaf_rank, c.specialty, c.distance, a.summary
+"""
+
 # Each weight is 1 or 0, so the chosen score parts are added up (all four give the priority score).
 LIST_LEADS = text(f"""
-    SELECT c.gaf_id, c.name, c.rating, c.review_count, c.certification, c.president_club_stars,
-           c.commercial_certification, c.services, c.distance_miles, c.priority_score, c.logo_url,
-           c.review_count_adjust_rating, c.gaf_rank, c.specialty, c.distance,
-           a.gaf_id IS NOT NULL AS has_analysis, a.summary
+    SELECT {LEAD_COLUMNS}
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id
     WHERE {FILTERS}
@@ -39,13 +43,10 @@ MAP_POINTS = text(f"""
     ORDER BY c.priority_score DESC, c.gaf_id
 """)
 
-GET_LEAD = text("""
-    SELECT c.gaf_id, c.name, c.rating, c.review_count, c.certification, c.president_club_stars,
-           c.commercial_certification, c.services, c.distance_miles, c.priority_score, c.logo_url,
-           c.review_count_adjust_rating, c.gaf_rank, c.specialty, c.distance,
-           c.phone, c.address, c.profile_url, c.fingerprint, c.updated_at,
-           a.gaf_id IS NOT NULL AS has_analysis,
-           a.summary, a.why_good_lead, a.pitch, a.talking_points, a.draft_email,
+GET_LEAD = text(f"""
+    SELECT {LEAD_COLUMNS},
+           c.phone, c.address, c.profile_url, c.fingerprint,
+           a.why_good_lead, a.pitch, a.talking_points, a.draft_email,
            a.fingerprint AS analysis_fingerprint
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id

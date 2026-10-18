@@ -92,6 +92,9 @@ ANALYSIS_SCHEMA = {
 class AbstractAIProvider:
     """Turns one contractor's facts into a sales analysis. Not used directly: each child writes _generate."""
 
+    # Each child sets the name of the model it asks; it is part of the fingerprint.
+    model = ""
+
     def analyze(self, facts: dict) -> dict:
         """Build the prompt from one contractor's facts and return the model's analysis as a dictionary."""
         stars = int(facts["president_club_stars"])
@@ -142,7 +145,7 @@ class AbstractAIProvider:
         return f"{REVIEW_BAND_EDGES[-1]}+"
 
     def fingerprint(self, contractor: dict) -> str:
-        """Fingerprint of exactly what the AI is told, so unchanged facts need no new analysis."""
+        """Fingerprint of exactly what the AI is told and which model answers, so unchanged facts need no new analysis."""
         facts = {}
         for field in AI_FACT_FIELDS:
             facts[field] = contractor[field]
@@ -155,4 +158,5 @@ class AbstractAIProvider:
         facts["president_club_stars"] = int(facts["president_club_stars"])
         facts["services"] = sorted(facts["services"])
         facts["prompt_version"] = PROMPT_VERSION
+        facts["model"] = self.model
         return hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()

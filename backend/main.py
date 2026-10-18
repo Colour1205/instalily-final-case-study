@@ -1,4 +1,4 @@
-"""Starts the API and the orchestrator as two separate processes on this machine.
+"""Sets up the tables, then starts the API and the orchestrator as two separate processes on this machine.
 
 In production they would run separately (several API servers, several orchestrators). Run from anywhere:
     python backend/main.py
@@ -19,7 +19,7 @@ log = logging.getLogger("main")
 
 
 def start(command: list[str]) -> subprocess.Popen:
-    """Start one child process in a way that lets main.py ask it to stop politely later."""
+    """Start one child process in a way that lets main.py stop it gracefully later."""
     if WINDOWS:
         # Its own process group, so it can be sent Ctrl+Break (Windows has no SIGTERM).
         return subprocess.Popen(command, cwd=BACKEND_FOLDER, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
@@ -29,6 +29,8 @@ def start(command: list[str]) -> subprocess.Popen:
 def main() -> None:
     """Start both processes; stop both cleanly when one of them ends or Ctrl+C is pressed."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # Create any missing tables once, before anything uses them (stops here if that fails).
+    subprocess.run([sys.executable, "orchestrator.py", "--setup-db"], cwd=BACKEND_FOLDER, check=True)
     api = start(
         [sys.executable, "-m", "uvicorn", "api:app", "--host", settings.api_host, "--port", str(settings.api_port)]
     )
@@ -40,9 +42,9 @@ def main() -> None:
             time.sleep(1)
         log.warning("One process stopped, stopping the other")
     except KeyboardInterrupt:
-        log.info("Stopping both processes after their current work")
+        log.info("Stopping both processes gracefully")
 
-    # Ask politely first, so the orchestrator can mark its jobs and scrape runs properly.
+    # Stop gracefully first, so the orchestrator can mark its jobs and scrape runs properly; kill after 90 s.
     for process in (api, orchestrator):
         if process.poll() is None:
             if WINDOWS:

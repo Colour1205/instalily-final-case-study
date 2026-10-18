@@ -139,13 +139,6 @@ function clipHtml(lead, i) {
     </div>`;
 }
 
-// The text typed out in the last part: the first talking point, or the summary until it loads.
-function tip(lead) {
-  const d = details.get(lead.gaf_id);
-  if (d && d.analysis) return d.analysis.talking_points[0];
-  return lead.summary || 'Analysis on its way.';
-}
-
 // How far through an effect we are, from 0 to 1.
 function progress(t, start, length) {
   if (calm.matches) return 1;
@@ -157,12 +150,6 @@ function type(el, text, share) {
   const shown = text.slice(0, Math.ceil(text.length * share));
   if (el.textContent !== shown) el.textContent = shown;
   el.classList.toggle('typing', share > 0 && share < 1);
-}
-
-// Close the window (if open) and open the lead with its email draft.
-function contact(id) {
-  closeWin();
-  openLead(id, null, { contact: true });
 }
 
 class Player {
@@ -322,7 +309,11 @@ class Player {
     type(rating, rating.dataset.text, progress(t, marks[3] + 500, ratingTime));
     type(count, count.dataset.text, progress(t, marks[3] + 700 + ratingTime, count.dataset.text.length * 35));
 
-    const text = tip(leads[this.clip]);
+    // The last part types out the first talking point, or the summary until the details load.
+    const lead = leads[this.clip];
+    const d = details.get(lead.gaf_id);
+    let text = lead.summary || 'Analysis on its way.';
+    if (d && d.analysis) text = d.analysis.talking_points[0];
     type(el.querySelector('.p-tip .typed'), text, progress(t, marks[4] + 400, Math.min(5200, text.length * 30)));
   }
 
@@ -381,8 +372,11 @@ class Player {
         return;
       }
       if (!btn) return;
-      if (btn.dataset.id) contact(btn.dataset.id);
-      else if (btn.classList.contains('close-x')) closeWin();
+      if (btn.dataset.id) {
+        // Contact: close the window (if open) and open the lead with its email draft.
+        closeWin();
+        openLead(btn.dataset.id, null, { contact: true });
+      } else if (btn.classList.contains('close-x')) closeWin();
       else if (btn.classList.contains('up')) this.go(this.clip - 1);
       else if (btn.classList.contains('down')) this.go(this.clip + 1);
       else if (long) return;
