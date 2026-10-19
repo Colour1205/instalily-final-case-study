@@ -11,7 +11,7 @@
 
 ## API endpoints
 ```
-GET /v1/leads?offset={offset}&limit={limit}&filter....
+GET /v1/leads?page={page}&limit={limit}&filter....
 GET /v1/map
 GET /v1/leads/{gaf_id}
 ```
