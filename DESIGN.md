@@ -37,7 +37,7 @@ controls data flow from scraping and analyze.
 - a distributive lock to prevent multiple orchestrate worker editing the same thing
 
 ### GAF Scraper
-scrapes GAF website. Since GAF bot detection prevents us from scrapings its website directly even though ROBOTS.txt says scrapers can access the list of contractors. To respect website owner policies, I found that GAF uses COVEO to provide the search data for their website and used browser tools to capture the entwork request they sent. The scraper uses that request to get the data. But the limitation is we don't have the about me section of the company (see future improvement for solution)
+scrapes GAF website. Since GAF bot detection prevents us from scrapings its website directly even though ROBOTS.txt says scrapers can access the list of contractors. To respect website owner policies, I found that GAF uses COVEO to provide the search data for their website and used browser tools to capture the network request they sent. The scraper uses that request to get the data. But the limitation is we don't have the about me section of the company (see future improvement for solution)
 
 ### Analysis
 Removes job from the queue and perform AI analysis based on the model selected in settings. For this I fine-tunned and quantized qwen 1.7b on ~1600 distilled data by a smarter model on Ollama, this offers cheap and fast model designed exactly for this use case without using costly api.
@@ -76,3 +76,4 @@ Used 4 parts with 25 points each, total 100 point
 - Paid or self hosted map server (OpenStreetMap allows light use only)
 - Replicas, currently my device only have 1 SQL database, the code aready supports multiple replicas.
 - Each analysis worker poll every 5 seconds to find new job, instead should use LISTEN/NOTIFY from PostgresSQL at scale
+- Implement a "research" agent that searches each finding for more details to bypass the GAF block
