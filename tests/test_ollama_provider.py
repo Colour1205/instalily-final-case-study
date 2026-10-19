@@ -5,9 +5,9 @@ import json
 import httpx
 import pytest
 
-from analysis import ai_ollama
-from analysis.ai_ollama import OllamaProvider
-from analysis.ai_provider import ANALYSIS_SCHEMA
+from analysis import ollama_provider
+from analysis.ollama_provider import OllamaProvider
+from analysis.abstract_provider import ANALYSIS_SCHEMA
 
 GOOD_ANSWER = {"summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a"], "draft_email": "e"}
 
@@ -44,7 +44,7 @@ def fake_post(response: FakeResponse, sent: list):
 def test_sends_the_prompts_with_the_schema_and_parses_the_answer(monkeypatch):
     """The system and user prompts go to /api/chat with the JSON schema; the JSON answer comes back as a dictionary."""
     sent = []
-    monkeypatch.setattr(ai_ollama.httpx, "post", fake_post(FakeResponse(json.dumps(GOOD_ANSWER)), sent))
+    monkeypatch.setattr(ollama_provider.httpx, "post", fake_post(FakeResponse(json.dumps(GOOD_ANSWER)), sent))
     provider = OllamaProvider("http://pc:11434/", "lili-analyst-1.7b", 120.0)
     assert provider._generate("system", "user") == GOOD_ANSWER
     request = sent[0]
@@ -58,9 +58,9 @@ def test_sends_the_prompts_with_the_schema_and_parses_the_answer(monkeypatch):
 def test_bad_answers_and_server_errors_raise(monkeypatch):
     """Text that is not JSON, or an HTTP error, raises, so the job goes back to the queue."""
     provider = OllamaProvider("http://pc:11434", "lili-analyst-1.7b", 120.0)
-    monkeypatch.setattr(ai_ollama.httpx, "post", fake_post(FakeResponse("not json"), []))
+    monkeypatch.setattr(ollama_provider.httpx, "post", fake_post(FakeResponse("not json"), []))
     with pytest.raises(json.JSONDecodeError):
         provider._generate("system", "user")
-    monkeypatch.setattr(ai_ollama.httpx, "post", fake_post(FakeResponse("", status_code=500), []))
+    monkeypatch.setattr(ollama_provider.httpx, "post", fake_post(FakeResponse("", status_code=500), []))
     with pytest.raises(httpx.HTTPStatusError):
         provider._generate("system", "user")

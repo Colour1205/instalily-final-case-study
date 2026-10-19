@@ -1,13 +1,13 @@
-"""Tests for the AbstractAIProvider parent class, using a fake child provider (no real AI calls)."""
+"""Tests for the AbstractProvider parent class, using a fake child provider (no real AI calls)."""
 
 from decimal import Decimal
 
 import pytest
 
-from analysis.ai_provider import AbstractAIProvider
+from analysis.abstract_provider import AbstractProvider
 
 
-class FakeProvider(AbstractAIProvider):
+class FakeProvider(AbstractProvider):
     """A child provider that records the prompt and returns a prepared answer."""
 
     def __init__(self) -> None:
@@ -71,9 +71,9 @@ def test_prompt_matches_what_the_local_model_was_trained_on():
 
 
 def test_parent_class_cannot_be_used_directly():
-    """AbstractAIProvider has no model, so analyze() must fail until a child writes _generate."""
+    """The parent class has no _generate of its own, so analyze() raises NotImplementedError until a child writes one."""
     with pytest.raises(NotImplementedError):
-        AbstractAIProvider().analyze(make_facts())
+        AbstractProvider().analyze(make_facts())
 
 
 def test_review_band_edges():
@@ -81,17 +81,17 @@ def test_review_band_edges():
     expected = {0: "none", 1: "1-9", 9: "1-9", 10: "10-49", 49: "10-49", 50: "50-99",
                 99: "50-99", 100: "100-499", 499: "100-499", 500: "500+", 1330: "500+"}
     for count, band in expected.items():
-        assert AbstractAIProvider().review_band(count) == band
+        assert AbstractProvider()._helper_review_band(count) == band
 
 
 def test_fingerprint_changes_only_for_facts_the_ai_uses():
     """Phone changes and a new review in the same band keep the fingerprint; a rating change does not."""
     provider = FakeProvider()
-    base = provider.fingerprint(make_facts())
-    assert provider.fingerprint(make_facts(phone="(555) 999-9999")) == base
-    assert provider.fingerprint(make_facts(review_count=121)) == base
-    assert provider.fingerprint(make_facts(review_count=500)) != base
-    assert provider.fingerprint(make_facts(rating=4.9)) != base
+    base = provider.compute_fingerprint(make_facts())
+    assert provider.compute_fingerprint(make_facts(phone="(555) 999-9999")) == base
+    assert provider.compute_fingerprint(make_facts(review_count=121)) == base
+    assert provider.compute_fingerprint(make_facts(review_count=500)) != base
+    assert provider.compute_fingerprint(make_facts(rating=4.9)) != base
 
 
 def test_fingerprint_changes_with_the_model():
@@ -100,11 +100,11 @@ def test_fingerprint_changes_with_the_model():
     first.model = "claude-haiku-5-5"
     second = FakeProvider()
     second.model = "lili-analyst-1.7b"
-    assert first.fingerprint(make_facts()) != second.fingerprint(make_facts())
+    assert first.compute_fingerprint(make_facts()) != second.compute_fingerprint(make_facts())
 
 
 def test_fingerprint_is_the_same_for_database_rows():
     """Decimal numbers and a different services order from PostgreSQL give the same fingerprint."""
     provider = FakeProvider()
     from_db = make_facts(rating=Decimal("4.8"), distance_miles=Decimal("9.50"), services=["Single-Ply", "Metal"])
-    assert provider.fingerprint(from_db) == provider.fingerprint(make_facts())
+    assert provider.compute_fingerprint(from_db) == provider.compute_fingerprint(make_facts())

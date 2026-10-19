@@ -25,7 +25,7 @@ LEAD_COLUMNS = """
 """
 
 # Each weight is 1 or 0, so the chosen score parts are added up (all four give the priority score).
-LIST_LEADS = text(f"""
+GET_LEADS = text(f"""
     SELECT {LEAD_COLUMNS}
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id
@@ -36,7 +36,7 @@ LIST_LEADS = text(f"""
     LIMIT :limit OFFSET :offset
 """)
 
-MAP_POINTS = text(f"""
+GET_MAP_POINTS = text(f"""
     SELECT c.gaf_id, c.name, c.latitude, c.longitude, c.priority_score
     FROM contractors c
     WHERE {FILTERS} AND c.latitude IS NOT NULL AND c.longitude IS NOT NULL
@@ -54,25 +54,25 @@ GET_LEAD = text(f"""
 """)
 
 
-class LeadStore:
+class LeadDataAccess:
     """Reads leads for the API. Every method runs on the connection the caller passes in."""
 
     def count_leads(self, connection: Connection, filters: dict) -> int:
         """How many leads match the filters (for paging)."""
         return connection.execute(COUNT_LEADS, filters).scalar_one()
 
-    def list_leads(self, connection: Connection, filters: dict, weights: dict, limit: int, offset: int) -> list[dict]:
+    def get_leads(self, connection: Connection, filters: dict, weights: dict, limit: int, offset: int) -> list[dict]:
         """One page of leads matching the filters, ranked by the weighted score parts (best first)."""
-        params = dict(filters)
+        parameters = dict(filters)
         for name in weights:
-            params[name] = weights[name]
-        params["limit"] = limit
-        params["offset"] = offset
-        return self.as_dicts(connection.execute(LIST_LEADS, params).mappings().all())
+            parameters[name] = weights[name]
+        parameters["limit"] = limit
+        parameters["offset"] = offset
+        return self._helper_as_dicts(connection.execute(GET_LEADS, parameters).mappings().all())
 
-    def map_points(self, connection: Connection, filters: dict) -> list[dict]:
+    def get_map_points(self, connection: Connection, filters: dict) -> list[dict]:
         """Name, position and score of every lead matching the filters (all of them, for the map)."""
-        return self.as_dicts(connection.execute(MAP_POINTS, filters).mappings().all())
+        return self._helper_as_dicts(connection.execute(GET_MAP_POINTS, filters).mappings().all())
 
     def get_lead(self, connection: Connection, gaf_id: str) -> dict | None:
         """One lead with its analysis, or None if the id is unknown."""
@@ -81,7 +81,7 @@ class LeadStore:
             return None
         return dict(row)
 
-    def as_dicts(self, rows) -> list[dict]:
+    def _helper_as_dicts(self, rows) -> list[dict]:
         """Turn database rows into plain dictionaries."""
         result = []
         for row in rows:

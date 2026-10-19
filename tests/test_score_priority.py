@@ -2,7 +2,7 @@
 
 import pytest
 
-from shared.score_priority import score_parts
+from shared.score_priority import compute_scores
 
 
 def make_contractor(**overrides) -> dict:
@@ -18,17 +18,17 @@ def make_contractor(**overrides) -> dict:
 
 def part(name: str, **overrides) -> float:
     """One part of the score for a contractor with the given changes."""
-    return score_parts(make_contractor(**overrides))[name]
+    return compute_scores(make_contractor(**overrides))[name]
 
 
-def test_score_parts_match_hand_worked_example():
-    """5.0 from 100 reviews, Master Elite with 1 star, 2 lines, 25 miles."""
-    parts = score_parts(make_contractor())
-    assert parts["review_count_adjust_rating"] == pytest.approx(12.5)
-    assert parts["gaf_rank"] == 20
-    assert parts["specialty"] == pytest.approx(25 * 2 / 3)
-    assert parts["distance"] == pytest.approx(12.5)
-    assert round(sum(parts.values()), 2) == pytest.approx(61.67)
+def test_scores_match_hand_worked_example():
+    """5.0 from 100 reviews, Master Elite with 1 star, 2 lines, 25 miles; every value rounded to 2 decimals."""
+    scores = compute_scores(make_contractor())
+    assert scores["review_count_adjust_rating"] == 12.5
+    assert scores["gaf_rank"] == 20
+    assert scores["specialty"] == 16.67
+    assert scores["distance"] == 12.5
+    assert scores["priority_score"] == 61.67
 
 
 def test_review_count_adjust_rating():

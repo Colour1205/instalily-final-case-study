@@ -4,10 +4,10 @@ import json
 
 import httpx
 
-from analysis.ai_provider import ANALYSIS_SCHEMA, AbstractAIProvider
+from analysis.abstract_provider import ANALYSIS_SCHEMA, AbstractProvider
 
 
-class OllamaProvider(AbstractAIProvider):
+class OllamaProvider(AbstractProvider):
     """Child class that asks a model served by Ollama (the fine-tuned lili-analyst by default) for each analysis."""
 
     def __init__(self, url: str, model: str, timeout_seconds: float) -> None:

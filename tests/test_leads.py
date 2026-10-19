@@ -9,8 +9,8 @@ import redis
 from fastapi.testclient import TestClient
 
 from api import app
-from leads import cache_leads, routes_leads
-from leads.service_leads import LeadService
+from leads import lead_cache, routes_leads
+from leads.lead_service import LeadService
 
 client = TestClient(app)
 service = LeadService()
@@ -35,7 +35,7 @@ def make_row(**overrides) -> dict:
 
 def test_summary_has_plain_numbers_and_the_score_breakdown():
     """Decimals become floats, and the score has a total plus the four parts."""
-    lead = service.lead_summary(make_row())
+    lead = service._lead_summary(make_row())
     assert lead["rating"] == 4.8
     assert lead["distance_miles"] == 25.0
     assert lead["score"]["total"] == 61.67
@@ -48,15 +48,15 @@ def test_summary_has_plain_numbers_and_the_score_breakdown():
 
 def test_detail_adds_contact_details_and_analysis():
     """The detail has a Maps link built from the address and says whether the analysis is current."""
-    lead = service.lead_detail(make_row())
+    lead = service._lead_detail(make_row())
     assert lead["contact"]["maps_url"] == "https://www.google.com/maps/search/?api=1&query=1+Main+St+Newark%2C+NJ+07101"
     assert lead["analysis"]["is_current"] is True
-    assert service.lead_detail(make_row(analysis_fingerprint="old"))["analysis"]["is_current"] is False
+    assert service._lead_detail(make_row(analysis_fingerprint="old"))["analysis"]["is_current"] is False
 
 
 def test_detail_without_analysis_or_address():
     """A lead with no analysis yet still shows, with analysis set to null."""
-    lead = service.lead_detail(make_row(summary=None, address=None))
+    lead = service._lead_detail(make_row(summary=None, address=None))
     assert lead["analysis"] is None
     assert lead["contact"]["maps_url"] is None
 
@@ -68,27 +68,27 @@ def test_cache_keys_never_mix_up_different_filters():
     two = dict(base, certifications=["Certified", "Master Elite"])
     one = dict(base, certifications=["Certified,Master Elite"])
     swapped = dict(base, certifications=["Master Elite", "Certified"])
-    assert service.filters_key(two) != service.filters_key(one)
-    assert service.filters_key(two) == service.filters_key(swapped)
-    assert service.filters_key(dict(base, q="Roof")) == service.filters_key(dict(base, q="roof"))
+    assert service._helper_filters_key(two) != service._helper_filters_key(one)
+    assert service._helper_filters_key(two) == service._helper_filters_key(swapped)
+    assert service._helper_filters_key(dict(base, q="Roof")) == service._helper_filters_key(dict(base, q="roof"))
 
 
 def test_sort_words_pick_which_score_parts_are_added_up():
     """No ranking words means all four parts (the priority score); otherwise only the chosen parts count."""
-    assert service.sort_weights([]) == {"w_rating": 1, "w_rank": 1, "w_specialty": 1, "w_distance": 1}
-    assert service.sort_weights(["rank", "specialty"]) == {"w_rating": 0, "w_rank": 1, "w_specialty": 1, "w_distance": 0}
+    assert service._helper_sort_weights([]) == {"w_rating": 1, "w_rank": 1, "w_specialty": 1, "w_distance": 1}
+    assert service._helper_sort_weights(["rank", "specialty"]) == {"w_rating": 0, "w_rank": 1, "w_specialty": 1, "w_distance": 0}
 
 
 def test_list_route_passes_the_ranking_and_rejects_unknown_words(monkeypatch):
     """Repeated sort values reach the service; a word that is not a score part is refused."""
     received = {}
 
-    def fake_list_leads(page, limit, filters, sort):
+    def fake_get_leads(page, limit, filters, sort):
         """Record the ranking and return an empty page."""
         received["sort"] = sort
         return {"page": page, "limit": limit, "total": 0, "leads": []}
 
-    monkeypatch.setattr(routes_leads.lead_service, "list_leads", fake_list_leads)
+    monkeypatch.setattr(routes_leads.lead_service, "get_leads", fake_get_leads)
     assert client.get("/v1/leads?sort=specialty&sort=rank").status_code == 200
     assert received["sort"] == ["specialty", "rank"]
     assert client.get("/v1/leads").status_code == 200
@@ -100,12 +100,12 @@ def test_list_route_passes_filters_and_returns_json(monkeypatch):
     """GET /v1/leads hands the page and every filter to the service and returns its JSON."""
     received = {}
 
-    def fake_list_leads(page, limit, filters, sort):
+    def fake_get_leads(page, limit, filters, sort):
         """Record the arguments and return a tiny page."""
         received["args"] = (page, limit, filters)
         return {"page": page, "limit": limit, "total": 0, "leads": []}
 
-    monkeypatch.setattr(routes_leads.lead_service, "list_leads", fake_list_leads)
+    monkeypatch.setattr(routes_leads.lead_service, "get_leads", fake_get_leads)
     query = "/v1/leads?page=2&limit=10&q=roof&certification=Master Elite&certification=Certified Plus"             "&service=Metal&service=&presidents_club=true&min_rating=4.5"
     response = client.get(query)
     assert response.status_code == 200
@@ -123,18 +123,18 @@ def test_map_route_returns_the_service_answer(monkeypatch):
         """Return a tiny map answer."""
         return {"center": {"zip": "10013"}, "radius_miles": 25, "points": [], "max": filters["max_distance"]}
 
-    monkeypatch.setattr(routes_leads.lead_service, "map_points", fake_map_points)
+    monkeypatch.setattr(routes_leads.lead_service, "get_map_points", fake_map_points)
     assert client.get("/v1/map?max_distance=10").json()["max"] == 10
 
 
 def test_only_the_github_pages_site_may_read_the_api_from_a_browser(monkeypatch):
     """The browser on GitHub Pages gets permission to read the API; any other website does not."""
 
-    def fake_list_leads(page, limit, filters, sort):
+    def fake_get_leads(page, limit, filters, sort):
         """Return an empty page."""
         return {"page": page, "limit": limit, "total": 0, "leads": []}
 
-    monkeypatch.setattr(routes_leads.lead_service, "list_leads", fake_list_leads)
+    monkeypatch.setattr(routes_leads.lead_service, "get_leads", fake_get_leads)
     allowed = client.get("/v1/leads", headers={"Origin": "https://colour1205.github.io"})
     assert allowed.headers.get("access-control-allow-origin") == "https://colour1205.github.io"
     other = client.get("/v1/leads", headers={"Origin": "https://example.com"})
@@ -219,17 +219,17 @@ def test_cached_answer_is_returned_without_building(monkeypatch):
     """Cache hit: the database read never runs."""
     fake_redis = FakeRedis()
     fake_redis.data["leads:v1:key"] = '{"total": 7}'
-    monkeypatch.setattr(cache_leads, "redis_client", fake_redis)
+    monkeypatch.setattr(lead_cache, "redis_client", fake_redis)
     counter = Counter()
-    assert cache_leads.LeadCache(60).get_or_build("leads:v1:key", counter.slow_read) == {"total": 7}
+    assert lead_cache.LeadCache(60).get_or_build("leads:v1:key", counter.slow_read) == {"total": 7}
     assert counter.calls == 0
 
 
 def test_only_one_of_many_requests_reads_the_database(monkeypatch):
     """Request coalescing: 10 requests miss at the same moment, only 1 reads the database, all get the answer."""
     fake_redis = FakeRedis()
-    monkeypatch.setattr(cache_leads, "redis_client", fake_redis)
-    cache = cache_leads.LeadCache(60)
+    monkeypatch.setattr(lead_cache, "redis_client", fake_redis)
+    cache = lead_cache.LeadCache(60)
     counter = Counter()
     answers = []
 
@@ -255,7 +255,7 @@ def test_waiters_build_themselves_when_the_builder_saves_nothing(monkeypatch):
     """If the lock disappears without an answer (unknown lead, or the builder failed), a waiter reads the database."""
     fake_redis = FakeRedis()
     fake_redis.data["lock:lead:v1:42"] = "1"
-    monkeypatch.setattr(cache_leads, "redis_client", fake_redis)
+    monkeypatch.setattr(lead_cache, "redis_client", fake_redis)
 
     def unlock_soon():
         """Remove the lock after 0.1 s, as a builder that saved nothing would."""
@@ -264,13 +264,13 @@ def test_waiters_build_themselves_when_the_builder_saves_nothing(monkeypatch):
 
     threading.Thread(target=unlock_soon).start()
     counter = Counter()
-    assert cache_leads.LeadCache(60).get_or_build("lead:v1:42", counter.slow_read) == {"total": 1, "leads": []}
+    assert lead_cache.LeadCache(60).get_or_build("lead:v1:42", counter.slow_read) == {"total": 1, "leads": []}
     assert counter.calls == 1
 
 
 def test_redis_down_means_reading_the_database(monkeypatch):
     """A Redis failure means 'not cached', never an error for the rep."""
-    monkeypatch.setattr(cache_leads, "redis_client", BrokenRedis())
+    monkeypatch.setattr(lead_cache, "redis_client", BrokenRedis())
     counter = Counter()
-    assert cache_leads.LeadCache(60).get_or_build("lead:v1:42", counter.slow_read) == {"total": 1, "leads": []}
+    assert lead_cache.LeadCache(60).get_or_build("lead:v1:42", counter.slow_read) == {"total": 1, "leads": []}
     assert counter.calls == 1

@@ -26,7 +26,7 @@ class LeadCache:
         """Set how long each saved answer lives before Redis deletes it."""
         self.seconds = seconds
 
-    def get(self, key: str) -> dict | None:
+    def _helper_get(self, key: str) -> dict | None:
         """Return the saved answer for this key, or None if it is missing, expired or Redis is down."""
         try:
             saved = redis_client.get(key)
@@ -42,7 +42,7 @@ class LeadCache:
 
         build is the function that reads the answer from the database.
         """
-        answer = self.get(key)
+        answer = self._helper_get(key)
         if answer is not None:
             return answer
 
@@ -55,28 +55,35 @@ class LeadCache:
             return build()
 
         if got_lock:
-            try:
-                # Check again: another request may have saved the answer just before this one got the lock.
-                answer = self.get(key)
-                if answer is None:
-                    answer = build()
-                    if answer is not None:
-                        redis_client.set(key, json.dumps(answer), ex=self.seconds)
-            except redis.RedisError as error:
-                log.warning("Redis write failed: %r", error)
-            finally:
-                try:
-                    redis_client.delete(lock_key)
-                except redis.RedisError:
-                    pass  # the lock expires by itself after LOCK_SECONDS
-            return answer
+            return self._helper_build_and_save(key, lock_key, build)
+        return self._helper_wait_for_builder(key, lock_key, build)
 
-        # Another request is rebuilding this answer: wait for it instead of hitting the database as well.
+    def _helper_build_and_save(self, key: str, lock_key: str, build) -> dict | None:
+        """Holding the lock: build the answer, save it for the other requests, then release the lock."""
+        answer = None
+        try:
+            # Check again: another request may have saved the answer just before this one got the lock.
+            answer = self._helper_get(key)
+            if answer is None:
+                answer = build()
+                if answer is not None:
+                    redis_client.set(key, json.dumps(answer), ex=self.seconds)
+        except redis.RedisError as error:
+            log.warning("Redis write failed: %r", error)
+        finally:
+            try:
+                redis_client.delete(lock_key)
+            except redis.RedisError:
+                pass  # the lock expires by itself after LOCK_SECONDS
+        return answer
+
+    def _helper_wait_for_builder(self, key: str, lock_key: str, build) -> dict | None:
+        """Another request is rebuilding this answer: wait for it instead of hitting the database as well."""
         waited = 0.0
         while waited < WAIT_SECONDS:
             time.sleep(CHECK_EVERY_SECONDS)
             waited += CHECK_EVERY_SECONDS
-            answer = self.get(key)
+            answer = self._helper_get(key)
             if answer is not None:
                 return answer
             try:

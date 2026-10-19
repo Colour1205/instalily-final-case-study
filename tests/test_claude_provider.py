@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from analysis.ai_claude import ClaudeProvider
+from analysis.claude_provider import ClaudeProvider
 
 GOOD_ANSWER = {"summary": "s", "why_good_lead": "w", "pitch": "p", "talking_points": ["a"], "draft_email": "e"}
 
@@ -48,7 +48,7 @@ class FakeClient:
 
 def make_provider(blocks: list) -> ClaudeProvider:
     """A ClaudeProvider whose API client is replaced by a fake returning these blocks."""
-    provider = ClaudeProvider("claude-haiku-5-5", "medium", 120.0, api_key="test-key")
+    provider = ClaudeProvider("claude-haiku-5-5", 120.0, api_key="test-key")
     provider.client = FakeClient(FakeResponse(blocks))
     return provider
 

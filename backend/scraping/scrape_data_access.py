@@ -37,7 +37,7 @@ UPSERT_CONTRACTOR = text("""
 """)
 
 # Adds a 'running' row only if this ZIP has no running scrape (unique index) and no recent finished one.
-START_RUN = text("""
+INSERT_RUN = text("""
     INSERT INTO scrape_runs (zip_code, status)
     SELECT :zip, 'running'
     WHERE NOT EXISTS (
@@ -49,15 +49,15 @@ START_RUN = text("""
 """)
 
 
-class ScrapeStore:
+class ScrapeDataAccess:
     """Reads and writes scrape_runs and contractors. Every method runs inside the caller's transaction."""
 
     def __init__(self, stuck_minutes: int) -> None:
         """Set when a 'running' scrape counts as stuck (left behind by a crash)."""
         self.stuck_minutes = stuck_minutes
 
-    def start_run(self, connection: Connection, zip_code: str, min_hours_between_scrapes: int) -> int | None:
-        """Log a new running scrape and return its id, or None if one is running or finished recently."""
+    def insert_run(self, connection: Connection, zip_code: str, min_hours_between_scrapes: int) -> int | None:
+        """Expire this ZIP's stuck runs, then log a new running scrape and return its id (None if one is running or finished recently)."""
         # A run left as 'running' by a crash would block every future scrape, so expire it.
         connection.execute(
             text(
@@ -67,9 +67,9 @@ class ScrapeStore:
             ),
             {"zip": zip_code, "minutes": self.stuck_minutes},
         )
-        return connection.execute(START_RUN, {"zip": zip_code, "hours": min_hours_between_scrapes}).scalar()
+        return connection.execute(INSERT_RUN, {"zip": zip_code, "hours": min_hours_between_scrapes}).scalar()
 
-    def finish_run(self, connection: Connection, run_id: int, status: str) -> None:
+    def mark_run_finished(self, connection: Connection, run_id: int, status: str) -> None:
         """Mark a still-running scrape as done or failed."""
         connection.execute(
             text("UPDATE scrape_runs SET status = :status WHERE id = :id AND status = 'running'"),

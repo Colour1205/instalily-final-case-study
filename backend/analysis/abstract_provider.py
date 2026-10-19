@@ -1,6 +1,6 @@
 """Parent class for AI providers (strategy pattern). Child classes only send the prompt to one model.
 
-Knows nothing about the database or the job queue.
+Knows nothing about the database or the analysis queue.
 """
 
 import hashlib
@@ -89,7 +89,7 @@ ANALYSIS_SCHEMA = {
 }
 
 
-class AbstractAIProvider:
+class AbstractProvider:
     """Turns one contractor's facts into a sales analysis. Not used directly: each child writes _generate."""
 
     # Each child sets the name of the model it asks; it is part of the fingerprint.
@@ -97,29 +97,30 @@ class AbstractAIProvider:
 
     def analyze(self, facts: dict) -> dict:
         """Build the prompt from one contractor's facts and return the model's analysis as a dictionary."""
-        stars = int(facts["president_club_stars"])
+        prepared = self._helper_prepare_facts(facts)
+        stars = prepared["president_club_stars"]
         presidents_club = "none"
         if stars == 1:
             presidents_club = "1 star"
         elif stars > 1:
             presidents_club = f"{stars} stars"
         rating = "no reviews yet"
-        if facts["rating"] is not None:
-            rating = f"{round(float(facts['rating']), 1)}/5"
+        if prepared["rating"] is not None:
+            rating = f"{prepared['rating']}/5"
         distance = "unknown"
-        if facts["distance_miles"] is not None:
-            distance = f"{round(float(facts['distance_miles']), 1)} miles"
+        if prepared["distance_miles"] is not None:
+            distance = f"{prepared['distance_miles']} miles"
 
         lines = [
-            f"Name: {facts['name']}",
-            f"Address: {facts['address'] or 'unknown'}",
+            f"Name: {prepared['name']}",
+            f"Address: {prepared['address'] or 'unknown'}",
             f"Distance: {distance}",
-            f"Certification: {facts['certification'] or 'none'}",
+            f"Certification: {prepared['certification'] or 'none'}",
             f"President's Club: {presidents_club}",
-            f"Commercial certification: {facts['commercial_certification'] or 'none'}",
+            f"Commercial certification: {prepared['commercial_certification'] or 'none'}",
             f"Rating: {rating}",
-            f"Reviews: {self.review_band(facts['review_count'])}",
-            f"Product lines: {', '.join(facts['services']) or 'none'}",
+            f"Reviews: {prepared['review_count']}",
+            f"Product lines: {', '.join(prepared['services']) or 'none'}",
             # Always this line: the fine-tuned local model (lili-analyst) was trained with prompt v3, which has it.
             "Website: not researched",
         ]
@@ -128,35 +129,42 @@ class AbstractAIProvider:
             prompt += "- " + line + "\n"
         return self._generate(SYSTEM_PROMPT, prompt)
 
+    def compute_fingerprint(self, contractor: dict) -> str:
+        """Fingerprint of exactly what the AI is told and which model answers, so unchanged facts need no new analysis."""
+        facts = self._helper_prepare_facts(contractor)
+        facts["prompt_version"] = PROMPT_VERSION
+        facts["model"] = self.model
+        return hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
+
     def _generate(self, system_prompt: str, user_prompt: str) -> dict:
         """Send the prompts to the model and return its JSON answer. Every child class must write its own version."""
         raise NotImplementedError("Each AI provider must write _generate")
 
-    def review_band(self, review_count: int) -> str:
+    def _helper_prepare_facts(self, facts: dict) -> dict:
+        """The facts exactly as the AI sees them, used by both the prompt and the fingerprint so they always agree.
+
+        Same types and rounding whether the facts came from GAF or from PostgreSQL (which returns Decimal numbers).
+        """
+        prepared = {}
+        for field in AI_FACT_FIELDS:
+            prepared[field] = facts[field]
+        if prepared["rating"] is not None:
+            prepared["rating"] = round(float(prepared["rating"]), 1)
+        if prepared["distance_miles"] is not None:
+            prepared["distance_miles"] = round(float(prepared["distance_miles"]), 1)
+        prepared["review_count"] = self._helper_review_band(prepared["review_count"])
+        prepared["president_club_stars"] = int(prepared["president_club_stars"])
+        prepared["services"] = sorted(prepared["services"])
+        return prepared
+
+    def _helper_review_band(self, review_count: int) -> str:
         """Group a review count into none, 1-9, 10-49, 50-99, 100-499 or 500+."""
         review_count = int(review_count)
         if review_count == 0:
             return "none"
-        for i in range(len(REVIEW_BAND_EDGES) - 1):
-            low = REVIEW_BAND_EDGES[i]
-            high = REVIEW_BAND_EDGES[i + 1]
+        for index in range(len(REVIEW_BAND_EDGES) - 1):
+            low = REVIEW_BAND_EDGES[index]
+            high = REVIEW_BAND_EDGES[index + 1]
             if review_count < high:
                 return f"{low}-{high - 1}"
         return f"{REVIEW_BAND_EDGES[-1]}+"
-
-    def fingerprint(self, contractor: dict) -> str:
-        """Fingerprint of exactly what the AI is told and which model answers, so unchanged facts need no new analysis."""
-        facts = {}
-        for field in AI_FACT_FIELDS:
-            facts[field] = contractor[field]
-        # Same types and rounding as the prompt, whether the facts came from GAF or from PostgreSQL.
-        if facts["rating"] is not None:
-            facts["rating"] = float(facts["rating"])
-        if facts["distance_miles"] is not None:
-            facts["distance_miles"] = round(float(facts["distance_miles"]), 1)
-        facts["review_count"] = self.review_band(facts["review_count"])
-        facts["president_club_stars"] = int(facts["president_club_stars"])
-        facts["services"] = sorted(facts["services"])
-        facts["prompt_version"] = PROMPT_VERSION
-        facts["model"] = self.model
-        return hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()

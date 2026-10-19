@@ -247,8 +247,10 @@ legend { padding: 0; margin-bottom: 8px; }
 .search-ico { display: grid; place-items: center; color: var(--mute); }
 .search-ico svg { width: 18px; height: 18px; }
 .filter-btn { display: none; }
-.count { margin: 14px 2px 10px; }
+.count { margin: 14px 10px 10px; }
+/* Slightly narrower than the search bar, so its frosted edges stay visible over the cards */
 .cards {
+  margin: 0 8px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--gap);
@@ -612,6 +614,10 @@ a.icon { text-decoration: none; }
 /* Phones */
 @media (max-width: 599px) {
   :root { --gap: 10px; --nav-top: 8px; --nav-h: 52px; }
+  /* The nav slides away while the cards scroll down (app.js); the search bar moves up into its place */
+  .nav, .search { transition: transform 0.3s var(--ease); }
+  .nav-hidden .nav { transform: translateY(calc(-100% - var(--nav-top) - 2px)); }
+  .nav-hidden .search { transform: translateY(calc(-1 * (var(--nav-h) + var(--gap)))); }
   .cards { grid-template-columns: minmax(0, 1fr); }
   .card { min-height: 0; }
   .search .pill { display: none; }

@@ -4,7 +4,7 @@ import time
 
 import httpx
 
-from scraping.scraper_gaf import GAFScraper
+from scraping.gaf_scraper import GAFScraper
 
 scraper = GAFScraper("10013")
 
@@ -26,7 +26,7 @@ class FakeResponse:
 
 
 def test_parse_result_reads_search_fields():
-    """A full made-up search result becomes the right contractor row."""
+    """A full made-up search result becomes the right contractor row, with GAF's numbers as given (no rounding)."""
     result = {
         "uri": "https://example.com/profile/42",
         "raw": {
@@ -48,14 +48,14 @@ def test_parse_result_reads_search_fields():
             "gaf_f_contractor_technologies_commercial": ["Single-Ply Roofer"],
         },
     }
-    contractor = scraper.parse_result(result)
+    contractor = scraper._parse_result(result)
     assert contractor["gaf_id"] == "42"
     assert contractor["rating"] == 4.7
     assert contractor["certification"] == "Master Elite"
     assert contractor["president_club_stars"] == 2
     assert contractor["commercial_certification"] == "GoldElite"
     assert contractor["services"] == ["Metal", "Single-Ply"]
-    assert contractor["distance_miles"] == 9.88
+    assert contractor["distance_miles"] == 9.876
     assert contractor["address"] == "1 Main St Newark, NJ 07101"
     assert contractor["latitude"] == 40.7
     assert contractor["longitude"] == -74.1
@@ -73,7 +73,7 @@ def test_parse_result_handles_sparse_contractor():
             "gaf_featured_image_src": "/-/media/images/no_profile_image.svg",
         },
     }
-    contractor = scraper.parse_result(result)
+    contractor = scraper._parse_result(result)
     assert contractor["rating"] is None
     assert contractor["certification"] == "Certified Plus"
     assert contractor["services"] == []
@@ -82,7 +82,7 @@ def test_parse_result_handles_sparse_contractor():
 
 
 def test_fetch_retries_then_skips_broken_results(monkeypatch):
-    """A 503 is retried; results with no id or no name are skipped; the rest are scored."""
+    """A 503 is retried; results with no id or no name are skipped; the rest are parsed but not scored."""
     results = [
         {"raw": {"gaf_contractor_id": "1", "gaf_navigation_title": "Good Roofing", "distanceinmiles": 3.0}},
         {"raw": {"gaf_contractor_id": "2", "distanceinmiles": 4.0}},
@@ -102,7 +102,5 @@ def test_fetch_retries_then_skips_broken_results(monkeypatch):
     contractors = scraper.fetch()
     assert len(contractors) == 1
     assert contractors[0]["gaf_id"] == "1"
-    assert contractors[0]["priority_score"] > 0
-    parts = contractors[0]["review_count_adjust_rating"] + contractors[0]["gaf_rank"]
-    parts += contractors[0]["specialty"] + contractors[0]["distance"]
-    assert abs(parts - contractors[0]["priority_score"]) < 0.05
+    assert contractors[0]["distance_miles"] == 3.0
+    assert "priority_score" not in contractors[0]

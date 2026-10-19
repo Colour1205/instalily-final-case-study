@@ -21,7 +21,7 @@ SAVE_ANALYSIS = text("""
 """)
 
 
-class AnalysisStore:
+class AnalysisDataAccess:
     """Reads contractor facts and writes analyses. Every method runs inside the caller's transaction."""
 
     def get_facts(self, connection: Connection, gaf_id: str) -> dict:
@@ -31,7 +31,7 @@ class AnalysisStore:
 
     def save_analysis(self, connection: Connection, gaf_id: str, analysis: dict, fingerprint: str) -> None:
         """Save a contractor's analysis, replacing any older one."""
-        params = dict(analysis)
-        params["gaf_id"] = gaf_id
-        params["fingerprint"] = fingerprint
-        connection.execute(SAVE_ANALYSIS, params)
+        parameters = dict(analysis)
+        parameters["gaf_id"] = gaf_id
+        parameters["fingerprint"] = fingerprint
+        connection.execute(SAVE_ANALYSIS, parameters)

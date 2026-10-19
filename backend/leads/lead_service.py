@@ -3,9 +3,9 @@
 import json
 from urllib.parse import quote_plus
 
-from leads.cache_leads import LeadCache
-from leads.db_access_leads import LeadStore
-from shared.config import settings
+from leads.lead_cache import LeadCache
+from leads.lead_data_access import LeadDataAccess
+from shared.settings import settings
 from shared.db_postgres import replica_engine
 
 
@@ -19,15 +19,15 @@ class LeadService:
     """The leads API's read side: uses the cache, opens replica connections and turns rows into JSON."""
 
     def __init__(self) -> None:
-        """Use the leads store for all SQL and the leads cache for Redis."""
-        self.store = LeadStore()
-        self.cache = LeadCache(settings.lead_cache_seconds)
+        """Use the lead data access class for all SQL and the lead cache for Redis."""
+        self.lead_data_access = LeadDataAccess()
+        self.cache = LeadCache(settings.LEAD_CACHE_SECONDS)
 
-    def list_leads(self, page: int, limit: int, filters: dict, sort: list[str]) -> dict:
+    def get_leads(self, page: int, limit: int, filters: dict, sort: list[str]) -> dict:
         """One page of leads ranked by the chosen score parts (by the priority score when none are chosen)."""
         sort = sorted(sort)
-        key = f"leads:v1:page={page}:limit={limit}:sort={','.join(sort)}:" + self.filters_key(filters)
-        weights = self.sort_weights(sort)
+        key = f"leads:v1:page={page}:limit={limit}:sort={','.join(sort)}:" + self._helper_filters_key(filters)
+        weights = self._helper_sort_weights(sort)
 
         def read_page() -> dict:
             """Read this page from the replica (only one request per key does this at a time)."""
@@ -35,28 +35,28 @@ class LeadService:
             try:
                 # One snapshot for both queries, so the total always matches the page.
                 connection.execution_options(isolation_level="REPEATABLE READ")
-                total = self.store.count_leads(connection, filters)
-                rows = self.store.list_leads(connection, filters, weights, limit, (page - 1) * limit)
+                total = self.lead_data_access.count_leads(connection, filters)
+                rows = self.lead_data_access.get_leads(connection, filters, weights, limit, (page - 1) * limit)
             finally:
                 # Read only, so nothing to commit: close() hands the connection back to the pool.
                 connection.close()
             leads = []
             for row in rows:
-                leads.append(self.lead_summary(row))
+                leads.append(self._lead_summary(row))
             return {"page": page, "limit": limit, "total": total, "leads": leads}
 
         return self.cache.get_or_build(key, read_page)
 
-    def map_points(self, filters: dict) -> dict:
+    def get_map_points(self, filters: dict) -> dict:
         """The search centre and radius, plus every matching lead's position and score, for the map."""
-        zip_code = settings.scrape_zip_codes[0]
-        latitude, longitude = settings.zip_coordinates[zip_code]
+        zip_code = settings.SCRAPE_ZIP_CODES[0]
+        latitude, longitude = settings.ZIP_COORDINATES[zip_code]
 
         def read_points() -> dict:
             """Read every matching lead's position from the replica."""
             connection = replica_engine.connect()
             try:
-                rows = self.store.map_points(connection, filters)
+                rows = self.lead_data_access.get_map_points(connection, filters)
             finally:
                 connection.close()
             points = []
@@ -66,17 +66,17 @@ class LeadService:
                     "name": row["name"],
                     "lat": row["latitude"],
                     "lng": row["longitude"],
-                    "score": self.to_float(row["priority_score"]),
+                    "score": self._helper_to_float(row["priority_score"]),
                 })
             return {
                 "center": {"zip": zip_code, "lat": latitude, "lng": longitude},
-                "radius_miles": settings.search_radius_miles,
+                "radius_miles": settings.SEARCH_RADIUS_MILES,
                 "points": points,
             }
 
-        return self.cache.get_or_build("map:v1:" + self.filters_key(filters), read_points)
+        return self.cache.get_or_build("map:v1:" + self._helper_filters_key(filters), read_points)
 
-    def sort_weights(self, sort: list[str]) -> dict:
+    def _helper_sort_weights(self, sort: list[str]) -> dict:
         """Weight 1 for each chosen score part and 0 for the others; nothing chosen means all four."""
         weights = {}
         for name in SORT_WEIGHTS:
@@ -84,7 +84,7 @@ class LeadService:
             weights[SORT_WEIGHTS[name]] = int(chosen)
         return weights
 
-    def filters_key(self, filters: dict) -> str:
+    def _helper_filters_key(self, filters: dict) -> str:
         """The filters written into a cache key as JSON, so two different filter sets can never share an answer."""
         key = dict(filters)
         if key["q"]:
@@ -100,38 +100,38 @@ class LeadService:
             """Read this lead from the replica (only one request per lead does this at a time)."""
             connection = replica_engine.connect()
             try:
-                row = self.store.get_lead(connection, gaf_id)
+                row = self.lead_data_access.get_lead(connection, gaf_id)
             finally:
                 connection.close()
             if row is None:
                 return None
-            return self.lead_detail(row)
+            return self._lead_detail(row)
 
         return self.cache.get_or_build(f"lead:v1:{gaf_id}", read_lead)
 
-    def lead_summary(self, row: dict) -> dict:
+    def _lead_summary(self, row: dict) -> dict:
         """The fields shown in the ranked list, with the score total and its four parts."""
-        score = {"total": self.to_float(row["priority_score"])}
+        score = {"total": self._helper_to_float(row["priority_score"])}
         for name in SCORE_PARTS:
-            score[name] = self.to_float(row[name])
+            score[name] = self._helper_to_float(row[name])
         return {
             "gaf_id": row["gaf_id"],
             "name": row["name"],
-            "rating": self.to_float(row["rating"]),
+            "rating": self._helper_to_float(row["rating"]),
             "review_count": row["review_count"],
             "certification": row["certification"],
             "president_club_stars": row["president_club_stars"],
             "commercial_certification": row["commercial_certification"],
             "services": row["services"],
-            "distance_miles": self.to_float(row["distance_miles"]),
+            "distance_miles": self._helper_to_float(row["distance_miles"]),
             "logo_url": row["logo_url"],
             "summary": row["summary"],
             "score": score,
         }
 
-    def lead_detail(self, row: dict) -> dict:
+    def _lead_detail(self, row: dict) -> dict:
         """Everything about one lead: the list fields, contact details and the AI analysis."""
-        lead = self.lead_summary(row)
+        lead = self._lead_summary(row)
         maps_url = None
         if row["address"]:
             maps_url = "https://www.google.com/maps/search/?api=1&query=" + quote_plus(row["address"])
@@ -155,7 +155,7 @@ class LeadService:
             }
         return lead
 
-    def to_float(self, value) -> float | None:
+    def _helper_to_float(self, value) -> float | None:
         """PostgreSQL returns NUMERIC columns as Decimal; JSON needs plain numbers."""
         if value is None:
             return None

@@ -579,6 +579,23 @@ function init() {
     if (entries[0].isIntersecting) loadMore();
   }, { root: $('.feed'), rootMargin: '800px' }).observe($('#sentinel'));
 
+  // Phones: the nav slides away while the cards scroll down and comes back on any scroll up; the search bar
+  // moves into its place (style.css). It always shows near the top of the list and while its menu is open.
+  const phone = window.matchMedia('(max-width: 599px)');
+  let lastY = 0;
+  $('.feed').addEventListener('scroll', e => {
+    const y = e.currentTarget.scrollTop;
+    if (!phone.matches || y < 60 || !$('#menuList').hidden) {
+      document.body.classList.remove('nav-hidden');
+      lastY = y;
+    } else if (Math.abs(y - lastY) > 6) {
+      document.body.classList.toggle('nav-hidden', y > lastY);
+      lastY = y;
+    }
+  }, { passive: true });
+  phone.addEventListener('change', () => document.body.classList.remove('nav-hidden'));
+  $('#nav').addEventListener('focusin', () => document.body.classList.remove('nav-hidden'));
+
   fitNav();
   if (document.fonts) document.fonts.ready.then(fitNav);
   loadMore();

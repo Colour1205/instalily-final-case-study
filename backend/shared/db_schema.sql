@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS analyses (
 );
 
 -- One queue row per contractor, holding the state of its AI job.
-CREATE TABLE IF NOT EXISTS ai_jobs (
+CREATE TABLE IF NOT EXISTS analysis_jobs (
     gaf_id     TEXT        PRIMARY KEY REFERENCES contractors (gaf_id) ON DELETE CASCADE,
     status     TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
     attempts   INTEGER     NOT NULL DEFAULT 0,
@@ -66,5 +66,5 @@ CREATE TABLE IF NOT EXISTS ai_jobs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS ai_jobs_pending ON ai_jobs (updated_at) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS ai_jobs_running ON ai_jobs (updated_at) WHERE status = 'running';
+CREATE INDEX IF NOT EXISTS analysis_jobs_pending ON analysis_jobs (updated_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS analysis_jobs_running ON analysis_jobs (updated_at) WHERE status = 'running';

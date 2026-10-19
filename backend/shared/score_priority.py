@@ -1,4 +1,4 @@
-"""The priority score formula: four parts worth up to 25 points each. Used by the scraper; the API reads the stored parts."""
+"""The priority score formula: four parts worth up to 25 points each. The orchestrator scores each scraped contractor; the API reads the stored parts."""
 
 PRIOR_RATING = 4.0
 PRIOR_REVIEWS = 100
@@ -6,8 +6,8 @@ CERTIFICATION_POINTS = {"Master Elite": 10, "Certified Plus": 5, "Certified": 0}
 DISTANCE_HALF_POINTS_MILES = 25
 
 
-def score_parts(contractor: dict) -> dict[str, float]:
-    """Work out the four 25-point parts of the priority score for one contractor."""
+def compute_scores(contractor: dict) -> dict[str, float]:
+    """The four 25-point parts of the priority score and their total, each rounded to 2 decimals."""
     reviews = contractor["review_count"]
     rating = contractor["rating"] or 0
     adjusted_rating = (rating * reviews + PRIOR_RATING * PRIOR_REVIEWS) / (reviews + PRIOR_REVIEWS)
@@ -28,9 +28,14 @@ def score_parts(contractor: dict) -> dict[str, float]:
     if contractor["distance_miles"] is not None:
         distance_points = 25 / (1 + contractor["distance_miles"] / DISTANCE_HALF_POINTS_MILES)
 
-    return {
+    parts = {
         "review_count_adjust_rating": review_points,
         "gaf_rank": gaf_rank_points,
         "specialty": specialty_points,
         "distance": distance_points,
     }
+    # The total adds the unrounded parts, so it is as exact as possible.
+    scores = {"priority_score": round(sum(parts.values()), 2)}
+    for name in parts:
+        scores[name] = round(parts[name], 2)
+    return scores
