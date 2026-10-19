@@ -67,7 +67,7 @@ Used 4 parts with 25 points each, total 100 point
 - Contractor Shorts: just like youtube short/tiktok/reels, let user scroll and view each contractor as a quick video content.
 - website optimized for all size of screens
 
-## Future Improvements
+## Future Improvements (another 8 hours)
 - rate limiter
 - elasticsearch: supports geospatial search and faster search speed across multiple filters
 - keyset pagination: If offsets gets slow on big lists
