@@ -40,8 +40,8 @@ controls data flow from scraping and analyze.
 scrapes GAF website. Since GAF bot detection prevents us from scrapings its website directly even though ROBOTS.txt says scrapers can access the list of contractors. To respect website owner policies, I found that GAF uses COVEO to provide the search data for their website and used browser tools to capture the network request they sent. The scraper uses that request to get the data. But the limitation is we don't have the about me section of the company (see future improvement for solution)
 
 ### Analysis
-Removes job from the queue and perform AI analysis based on the model selected in settings. For this I fine-tunned and quantized qwen 1.7b on ~1600 distilled data by a smarter model on Ollama, this offers cheap and fast model designed exactly for this use case without using costly api.
-- FYI: 800 contractors analyzed by Haiku costed $3, my qwen 1.7b Q4_K_M (called lili-analyst) is practically free and really lightweight with result just as good. 207 tokens/s on RTX3070 (~1.5s per request)
+Claim job from the queue and perform AI analysis based on the model selected in settings. Eech claim will lock that job in the queue table to prevent other analysis running it. For this I fine-tunned and quantized qwen 1.7b on ~1600 distilled data by a smarter model on Ollama, this offers cheap and fast model designed exactly for this use case without using costly api.
+- FYI: 800 contractors analyzed by Haiku costed $2, my qwen 1.7b Q4_K_M (called lili-analyst) is practically free and really lightweight with result just as good. 207 tokens/s on RTX3070 (~1.5s per request)
 - use a fingerprint on each job to make sure no tokens is spent on analyzing the same unchanged data
 - reviews is sent as bands (none, 1-9, 10-49, etc) so analysis doesn't have to rerun just because 1 more review is added for popular contractors (not really gonna matter). Reduces cost
 
@@ -67,13 +67,21 @@ Used 4 parts with 25 points each, total 100 point
 - Contractor Shorts: just like youtube short/tiktok/reels, let user scroll and view each contractor as a quick video content.
 - website optimized for all size of screens
 
+## Alternatives
+- considered mongodb, dynamodb but chose postgres because I am most familiar with it and relational db fits better here
+- considered scraping GAF with headless browser but chose to use coveo instead because gaf.com blocks automated visitors and trying to bypass that is not ethical
+- considered claude haiku, qwen4b but chose fine tuned qwen1.7b because its light weight, and runs very fast with good enough quality
+- considered react or another framework but chose plain html/css/js since its simple and sufficient for this frontend
+- considered letting AI score leads but chose the 4 parts formula because small models like qwen 1.7b might drift for something thats needs absolute accuracy 
+- considered cursor pagination but chose offset pagination since its simple and site don't have alot of contractors to slow down offset
+
 ## Future Improvements (another 8 hours)
 - rate limiter
 - elasticsearch: supports geospatial search and faster search speed across multiple filters
-- keyset pagination: If offsets gets slow on big lists
+- cursor pagination: If offsets gets slow on big lists
 - CDN for the frontend and cached answers
 - retrain lili-analyst (my fine tuned model) on more data to cover edge cases
 - Paid or self hosted map server (OpenStreetMap allows light use only)
 - Replicas, currently my device only have 1 SQL database, the code aready supports multiple replicas.
 - Each analysis worker poll every 5 seconds to find new job, instead should use LISTEN/NOTIFY from PostgresSQL at scale
-- Implement a "research" agent that searches each finding for more details to bypass the GAF block
+- Implement a "research" agent that searches each finding for more details to work around the GAF block

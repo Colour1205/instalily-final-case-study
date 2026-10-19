@@ -82,7 +82,7 @@ Then open `.env` and set `POSTGRES_PASSWORD`. Every other setting has a working 
 fine-tuned model running on a private computer, so it is not reachable from yours. Pick one of these instead by removing
 the `#` in front of the matching lines in `.env`:
 
-- **Claude** (about $0.40 for all 426 contractors): `AI_PROVIDER=claude`, `AI_MODEL=claude-haiku-5-5` and your `ANTHROPIC_API_KEY`.
+- **Claude** (about $1 for all 426 contractors): `AI_PROVIDER=claude`, `AI_MODEL=claude-haiku-5-5` and your `ANTHROPIC_API_KEY`.
 - **Ollama on your own computer** (free): install Ollama from https://ollama.com, run `ollama pull qwen3:1.7b`, then set
   `AI_PROVIDER=ollama`, `AI_MODEL=qwen3:1.7b` and `OLLAMA_URL=http://localhost:11434`. Any Ollama model works; the answers
   are better with a larger or fine-tuned one.
