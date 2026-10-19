@@ -24,19 +24,19 @@ def part(name: str, **overrides) -> float:
 def test_scores_match_hand_worked_example():
     """5.0 from 100 reviews, Master Elite with 1 star, 2 lines, 25 miles; every value rounded to 2 decimals."""
     scores = compute_scores(make_contractor())
-    assert scores["review_count_adjust_rating"] == 12.5
+    assert scores["review_count_adjusted_rating"] == 12.5
     assert scores["gaf_rank"] == 20
     assert scores["specialty"] == 16.67
     assert scores["distance"] == 12.5
     assert scores["priority_score"] == 61.67
 
 
-def test_review_count_adjust_rating():
+def test_review_count_adjusted_rating():
     """No reviews and low ratings get 0; many good reviews beat a few perfect ones."""
-    assert part("review_count_adjust_rating", rating=None, review_count=0) == 0
-    assert part("review_count_adjust_rating", rating=3.3, review_count=50) == 0
-    few_perfect = part("review_count_adjust_rating", rating=5.0, review_count=8)
-    many_good = part("review_count_adjust_rating", rating=4.9, review_count=1330)
+    assert part("review_count_adjusted_rating", rating=None, review_count=0) == 0
+    assert part("review_count_adjusted_rating", rating=3.3, review_count=50) == 0
+    few_perfect = part("review_count_adjusted_rating", rating=5.0, review_count=8)
+    many_good = part("review_count_adjusted_rating", rating=4.9, review_count=1330)
     assert many_good > few_perfect
 
 

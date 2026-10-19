@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS contractors (
     fingerprint                TEXT         NOT NULL,
     priority_score             NUMERIC(5,2) NOT NULL,
     -- The four 25-point parts of priority_score, so the list can be ranked by any of them.
-    review_count_adjust_rating NUMERIC(5,2) NOT NULL DEFAULT 0,
+    review_count_adjusted_rating NUMERIC(5,2) NOT NULL DEFAULT 0,
     gaf_rank                   NUMERIC(5,2) NOT NULL DEFAULT 0,
     specialty                  NUMERIC(5,2) NOT NULL DEFAULT 0,
     distance                   NUMERIC(5,2) NOT NULL DEFAULT 0,

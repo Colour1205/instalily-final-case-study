@@ -25,7 +25,7 @@ export const ico = {
 };
 
 export const parts = [
-  ['review_count_adjust_rating', 'Rating', 'var(--p1)'],
+  ['review_count_adjusted_rating', 'Reviews', 'var(--p1)'],
   ['gaf_rank', 'GAF rank', 'var(--p2)'],
   ['specialty', 'Specialty', 'var(--p3)'],
   ['distance', 'Distance', 'var(--p4)'],
@@ -101,10 +101,10 @@ function toast(text) {
 
 // Search-bar words that rank the list by a score part instead of searching names.
 const rankWords = {
-  rating: 'rating', reviews: 'rating', gaf: 'rank', rank: 'rank',
+  review: 'review', reviews: 'review', gaf: 'rank', rank: 'rank',
   specialty: 'specialty', specialties: 'specialty', distance: 'distance', closest: 'distance', nearest: 'distance',
 };
-const rankNames = { rating: 'Rating', rank: 'GAF rank', specialty: 'Specialty', distance: 'Distance' };
+const rankNames = { review: 'Reviews', rank: 'GAF rank', specialty: 'Specialty', distance: 'Distance' };
 
 // Split the search text into ranking words and the words to look for in names and addresses.
 function readSearch() {

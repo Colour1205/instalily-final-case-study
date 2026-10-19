@@ -596,6 +596,8 @@ a.icon { text-decoration: none; }
   .shell { grid-template-columns: minmax(0, 1fr); }
   .side {
     position: fixed;
+    /* Stretch between top and bottom, so a short screen scrolls the filters instead of hiding them */
+    align-self: stretch;
     z-index: 35;
     top: 0;
     left: 0;

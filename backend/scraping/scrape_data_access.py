@@ -6,11 +6,11 @@ UPSERT_CONTRACTOR = text("""
     INSERT INTO contractors (
         gaf_id, name, rating, review_count, certification, president_club_stars, commercial_certification,
         services, phone, address, distance_miles, latitude, longitude, profile_url, logo_url, fingerprint, priority_score,
-        review_count_adjust_rating, gaf_rank, specialty, distance
+        review_count_adjusted_rating, gaf_rank, specialty, distance
     ) VALUES (
         :gaf_id, :name, :rating, :review_count, :certification, :president_club_stars, :commercial_certification,
         :services, :phone, :address, :distance_miles, :latitude, :longitude, :profile_url, :logo_url, :fingerprint,
-        :priority_score, :review_count_adjust_rating, :gaf_rank, :specialty, :distance
+        :priority_score, :review_count_adjusted_rating, :gaf_rank, :specialty, :distance
     )
     ON CONFLICT (gaf_id) DO UPDATE SET
         name = EXCLUDED.name,
@@ -29,7 +29,7 @@ UPSERT_CONTRACTOR = text("""
         logo_url = EXCLUDED.logo_url,
         fingerprint = EXCLUDED.fingerprint,
         priority_score = EXCLUDED.priority_score,
-        review_count_adjust_rating = EXCLUDED.review_count_adjust_rating,
+        review_count_adjusted_rating = EXCLUDED.review_count_adjusted_rating,
         gaf_rank = EXCLUDED.gaf_rank,
         specialty = EXCLUDED.specialty,
         distance = EXCLUDED.distance,

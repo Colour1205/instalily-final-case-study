@@ -54,7 +54,7 @@ Used 4 parts with 25 points each, total 100 point
 
 ## Database Schemas
 - scrape_runs(<u>id</u>, zip_code, status, started_at)
-- contractors(<u>gaf_id</u>, name, rating, review_count, certification, president_club_stars, commercial_certification, services, phone, address, distance_miles, latitude, longitude, profile_url, logo_url, fingerprint, priority_score, review_count_adjust_rating, gaf_rank, specialty, distance, updated_at)
+- contractors(<u>gaf_id</u>, name, rating, review_count, certification, president_club_stars, commercial_certification, services, phone, address, distance_miles, latitude, longitude, profile_url, logo_url, fingerprint, priority_score, review_count_adjusted_rating, gaf_rank, specialty, distance, updated_at)
 - analyses(<u>gaf_id</u>, summary, why_good_lead, pitch, talking_points, draft_email, fingerprint)
 - analysis_jobs(<u>gaf_id</u>, status, attempts, error, delay, updated_at)
 

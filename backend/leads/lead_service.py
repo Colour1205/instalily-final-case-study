@@ -10,9 +10,9 @@ from shared.db_postgres import replica_engine
 
 
 # The four score parts as stored in the contractors table (the user's exact names).
-SCORE_PARTS = ("review_count_adjust_rating", "gaf_rank", "specialty", "distance")
+SCORE_PARTS = ("review_count_adjusted_rating", "gaf_rank", "specialty", "distance")
 # Ranking words the API accepts, and the SQL weight each one switches on.
-SORT_WEIGHTS = {"rating": "w_rating", "rank": "w_rank", "specialty": "w_specialty", "distance": "w_distance"}
+SORT_WEIGHTS = {"review": "w_review", "rank": "w_rank", "specialty": "w_specialty", "distance": "w_distance"}
 
 
 class LeadService:

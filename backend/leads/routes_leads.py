@@ -50,7 +50,7 @@ def get_leads(
     filters: dict = Depends(_lead_filters),
 ) -> dict:
     """One page of leads. Ranked by priority score, or by the sum of the parts named in sort
-    (rating, rank, specialty, distance; repeat sort to pick several). All filters are optional."""
+    (review, rank, specialty, distance; repeat sort to pick several). All filters are optional."""
     chosen = _helper_non_empty(sort) or []
     for name in chosen:
         if name not in SORT_WEIGHTS:

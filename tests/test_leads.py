@@ -22,7 +22,7 @@ def make_row(**overrides) -> dict:
         "gaf_id": "42", "name": "Example Roofing", "rating": Decimal("4.8"), "review_count": 120,
         "certification": "Master Elite", "president_club_stars": 1, "commercial_certification": None,
         "services": ["Metal", "Solar"], "distance_miles": Decimal("25.00"), "priority_score": Decimal("61.67"),
-        "review_count_adjust_rating": Decimal("12.50"), "gaf_rank": Decimal("20.00"), "specialty": Decimal("16.67"),
+        "review_count_adjusted_rating": Decimal("12.50"), "gaf_rank": Decimal("20.00"), "specialty": Decimal("16.67"),
         "distance": Decimal("12.50"),
         "logo_url": None, "phone": "(555) 000-0000", "address": "1 Main St Newark, NJ 07101",
         "profile_url": "https://example.com/42", "fingerprint": "abc",
@@ -43,7 +43,7 @@ def test_summary_has_plain_numbers_and_the_score_breakdown():
     assert lead["score"]["distance"] == 12.5
     assert lead["score"]["specialty"] == 16.67
     assert lead["summary"] == "s"
-    assert set(lead["score"]) == {"total", "review_count_adjust_rating", "gaf_rank", "specialty", "distance"}
+    assert set(lead["score"]) == {"total", "review_count_adjusted_rating", "gaf_rank", "specialty", "distance"}
 
 
 def test_detail_adds_contact_details_and_analysis():
@@ -75,8 +75,8 @@ def test_cache_keys_never_mix_up_different_filters():
 
 def test_sort_words_pick_which_score_parts_are_added_up():
     """No ranking words means all four parts (the priority score); otherwise only the chosen parts count."""
-    assert service._helper_sort_weights([]) == {"w_rating": 1, "w_rank": 1, "w_specialty": 1, "w_distance": 1}
-    assert service._helper_sort_weights(["rank", "specialty"]) == {"w_rating": 0, "w_rank": 1, "w_specialty": 1, "w_distance": 0}
+    assert service._helper_sort_weights([]) == {"w_review": 1, "w_rank": 1, "w_specialty": 1, "w_distance": 1}
+    assert service._helper_sort_weights(["rank", "specialty"]) == {"w_review": 0, "w_rank": 1, "w_specialty": 1, "w_distance": 0}
 
 
 def test_list_route_passes_the_ranking_and_rejects_unknown_words(monkeypatch):

@@ -29,7 +29,7 @@ def compute_scores(contractor: dict) -> dict[str, float]:
         distance_points = 25 / (1 + contractor["distance_miles"] / DISTANCE_HALF_POINTS_MILES)
 
     parts = {
-        "review_count_adjust_rating": review_points,
+        "review_count_adjusted_rating": review_points,
         "gaf_rank": gaf_rank_points,
         "specialty": specialty_points,
         "distance": distance_points,

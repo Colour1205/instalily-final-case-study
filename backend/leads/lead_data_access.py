@@ -21,7 +21,7 @@ COUNT_LEADS = text(f"SELECT count(*) FROM contractors c WHERE {FILTERS}")
 LEAD_COLUMNS = """
     c.gaf_id, c.name, c.rating, c.review_count, c.certification, c.president_club_stars,
     c.commercial_certification, c.services, c.distance_miles, c.priority_score, c.logo_url,
-    c.review_count_adjust_rating, c.gaf_rank, c.specialty, c.distance, a.summary
+    c.review_count_adjusted_rating, c.gaf_rank, c.specialty, c.distance, a.summary
 """
 
 # Each weight is 1 or 0, so the chosen score parts are added up (all four give the priority score).
@@ -30,7 +30,7 @@ GET_LEADS = text(f"""
     FROM contractors c
     LEFT JOIN analyses a ON a.gaf_id = c.gaf_id
     WHERE {FILTERS}
-    ORDER BY (:w_rating * c.review_count_adjust_rating + :w_rank * c.gaf_rank
+    ORDER BY (:w_review * c.review_count_adjusted_rating + :w_rank * c.gaf_rank
               + :w_specialty * c.specialty + :w_distance * c.distance) DESC,
              c.priority_score DESC, c.gaf_id
     LIMIT :limit OFFSET :offset
