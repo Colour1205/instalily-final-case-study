@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The LiLi logo mark: a green square with an offset shadow square, in the site's light and dark colours -->
+  <style>
+    .back { fill: #8fb29c; }
+    .front { fill: #2e6b45; }
+    @media (prefers-color-scheme: dark) {
+      .back { fill: #3f7d57; }
+      .front { fill: #8fb29c; }
+    }
+  </style>
+  <rect class="back" x="8" y="8" width="22" height="22"/>
+  <rect class="front" x="2" y="2" width="22" height="22"/>
+</svg>
