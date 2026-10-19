@@ -78,7 +78,7 @@ cp .env.example .env
 
 Then open `.env` and set `POSTGRES_PASSWORD`. Every other setting has a working default.
 
-**Choosing the AI (needed only for the AI sales notes, step 6).** The default model, `lili-analyst`, is the author's own
+**Choosing the AI (needed only for the AI sales notes).** The default model, `lili-analyst`, is the author's own
 fine-tuned model running on a private computer, so it is not reachable from yours. Pick one of these instead by removing
 the `#` in front of the matching lines in `.env`:
 
@@ -99,26 +99,20 @@ python backend/orchestrator.py --scrape
 The scrape takes a few seconds and should end with `ZIP 10013: saved 426 contractors, queued 426 AI jobs`
 (the number changes as GAF's directory changes).
 
-### 6. Write the AI sales notes (optional)
+> **Why these two are needed once:** `--setup-db` creates the tables, which the scrape needs (`main.py` also runs it,
+> but only when it starts). `--scrape` fills the empty database now: `main.py` only scrapes on its nightly schedule
+> (2 to 7 AM New York time), so without it the website would stay empty until then.
 
-```bash
-python backend/orchestrator.py --analyze
-```
-
-This works through every waiting job and then stops. It takes a few seconds per contractor. You can skip it: the
-background worker started in step 7 also writes the notes, a few at a time.
-
-**Skip this step if you did not choose an AI in step 4.** Every job would fail, and the command would take a long time
-to try all of them.
-
-### 7. Start the app
+### 6. Start the app
 
 ```bash
 python backend/main.py
 ```
 
-If you skipped the AI, the background worker logs a warning now and then while it retries the jobs. That is expected,
-and the website works normally.
+This starts the API and the background worker. The worker writes the AI sales notes for the queued contractors by
+itself, a few at a time (a few seconds each), so new notes appear on the website as they are ready.
+If you skipped the AI, the worker logs a warning now and then while it retries the jobs. That is expected, and the
+website works normally.
 
 Open **http://localhost:8000** for the website and **http://localhost:8000/docs** for the interactive API documentation.
 Press Ctrl+C in the terminal to stop.
